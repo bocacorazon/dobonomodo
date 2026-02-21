@@ -32,15 +32,19 @@ Product Context → /speckit.constitution → /speckit.specify → /speckit.plan
 
 ## Current Development Phase
 
-**Phase**: Product Management / Entity Definition
+**Phase**: Product Management / Entity & Capability Definition
 
-**Active goal**: Define entities, their interactions, inputs, outputs, and behaviors in sufficient detail to produce a high-quality product spec that feeds the Spec-Kit workflow.
+**Active goal**: Define entities and capabilities in sufficient detail to produce a high-quality product spec that feeds the Spec-Kit workflow.
 
-**Key artifacts to produce**:
-- Entity model (entities, their attributes, relationships)
-- Interaction model (how entities communicate, trigger operations)
-- DSL specification (operations, syntax, semantics)
-- Data model (Dataset structure, table schema conventions)
+**Completed**:
+- ✅ Constitution ratified v1.0.0 — TDD, quality gates, completion bias, comprehensive test execution
+- ✅ `pm.entity` agent — Socratic interview → `docs/entities/<name>.md`
+- ✅ `pm.capability` agent — Socratic interview → `docs/capabilities/<name>.md`
+
+**Remaining to produce**:
+- Entity definitions in `docs/entities/` (start with: Dataset, Computation Engine, DSL, Operation)
+- Capability definitions in `docs/capabilities/`
+- Then: `/speckit.specify` to formalise into a product spec
 
 ## Key Concepts
 
