@@ -4,7 +4,9 @@
         "speckit.specify": true,
         "speckit.plan": true,
         "speckit.tasks": true,
-        "speckit.implement": true
+        "speckit.implement": true,
+        "pm.entity": true,
+        "pm.capability": true
     },
     "chat.tools.terminal.autoApprove": {
         ".specify/scripts/bash/": true,
