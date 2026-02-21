@@ -31,7 +31,14 @@
 
 *GATE: Must pass before Phase 0 research. Re-check after Phase 1 design.*
 
-[Gates determined based on constitution file]
+**Constitutional Principles to Verify**:
+
+- [ ] **Principle I (TDD)**: All implementation tasks paired with tests written FIRST
+- [ ] **Principle II (Quality Gates)**: Build, lint, and test infrastructure configured
+- [ ] **Principle III (Completion Bias)**: Ambiguities resolved; no open decision blocks
+- [ ] **Principle IV (Comprehensive Testing)**: Test suite execution plan covers all test types
+
+**Notes**: Document any principle conflicts or justified exceptions below.
 
 ## Project Structure
 
