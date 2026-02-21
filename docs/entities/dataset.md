@@ -33,6 +33,7 @@ A Dataset is the primary input definition for the computation engine. It specifi
 | Attribute | Type | Required | Constraints | Description |
 |---|---|---|---|---|
 | `name` | `String` | Yes | Non-empty; unique within the Dataset | Logical name for the table within this Dataset |
+| `bitemporal` | `Boolean` | No | Default `false`; when `true`, replaces `_period` with `_period_from`/`_period_to` and adds `_valid_from`/`_valid_to` on rows | Enables bitemporal tracking on this table — see [[Bitemporal Dataset]] |
 | `datasource_id` | `UUID` | No* | Must reference a valid, active DataSource; preferred over inline `location` | Reference to a named DataSource; table-specific detail (table name or relative path) supplied alongside |
 | `table` | `String` | No* | Required when `datasource_id` is a `database` type | Table name within the DataSource's database/schema |
 | `path` | `String` | No* | Required when `datasource_id` is a `parquet`, `csv`, or `api` type | Relative path/endpoint appended to the DataSource's `path_prefix` or `endpoint` |
@@ -267,3 +268,4 @@ dataset:
 - [[ComputationEngine]] — Consumes a Dataset as its primary input definition when executing DSL programs.
 - [[DSL]] — May request dynamic (runtime) joins on top of the Dataset's pre-defined structure.
 - [[Period]] — The `_period` metadata column on each row stores a Period string identifier; the Period entity defines its meaning, boundaries, and rollup hierarchy.
+- [[Bitemporal Dataset]] — A subtype where individual tables are flagged `bitemporal: true`, replacing `_period` with `_period_from`/`_period_to` and adding `_valid_from`/`_valid_to` axes.

@@ -27,12 +27,12 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "docs/entities/dataset.md",
-                "mode": "source",
+                "file": "docs/entities/period.md",
+                "mode": "preview",
                 "source": true
               },
               "icon": "lucide-file",
-              "title": "dataset"
+              "title": "period"
             }
           }
         ],
@@ -109,7 +109,7 @@
             "state": {
               "type": "backlink",
               "state": {
-                "file": "docs/entities/dataset.md",
+                "file": "docs/entities/period.md",
                 "collapseAll": false,
                 "extraContext": false,
                 "sortOrder": "alphabetical",
@@ -119,7 +119,7 @@
                 "unlinkedCollapsed": true
               },
               "icon": "links-coming-in",
-              "title": "Backlinks for dataset"
+              "title": "Backlinks for period"
             }
           },
           {
@@ -128,12 +128,12 @@
             "state": {
               "type": "outgoing-link",
               "state": {
-                "file": "docs/entities/dataset.md",
+                "file": "docs/entities/period.md",
                 "linksCollapsed": false,
                 "unlinkedCollapsed": true
               },
               "icon": "links-going-out",
-              "title": "Outgoing links from dataset"
+              "title": "Outgoing links from period"
             }
           },
           {
@@ -171,13 +171,13 @@
             "state": {
               "type": "outline",
               "state": {
-                "file": "docs/entities/dataset.md",
+                "file": "docs/entities/period.md",
                 "followCursor": false,
                 "showSearch": false,
                 "searchQuery": ""
               },
               "icon": "lucide-list",
-              "title": "Outline of dataset"
+              "title": "Outline of period"
             }
           }
         ]
@@ -198,8 +198,11 @@
       "bases:Create new base": false
     }
   },
-  "active": "57b760ba66d39c77",
+  "active": "5346e1073dac9bb4",
   "lastOpenFiles": [
+    "docs/entities/expression.md",
+    "docs/entities/bitemporal-dataset.md",
+    "docs/entities/dataset.md",
     "docs/entities/calendarmapping.md",
     "docs/entities/datasource.md",
     "docs/entities/run.md",
@@ -207,7 +210,6 @@
     "docs/entities/period.md",
     "docs/entities/project.md",
     "DobONoMoDo.md",
-    "docs/entities/dataset.md",
     "docs/capabilities",
     "docs/entities",
     "Dataset.md",
