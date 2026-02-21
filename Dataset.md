@@ -1,1 +1,0 @@
-A dataset is a consolidated view of all the tables
