@@ -22,16 +22,41 @@ A Dataset is the primary input definition for the computation engine. It specifi
 | `owner` | `User` | Yes | Must reference a valid user | The user who assembled this Dataset |
 | `version` | `Integer` | Yes | Auto-incremented on every change, starts at 1 | Tracks evolution of the definition |
 | `status` | `Enum` | Yes | `active` \| `disabled` | Controls availability for use in new Projects |
-| `main_table` | `TableRef` | Yes | Must reference a valid Table with a defined data source | The primary table of the Dataset |
-| `lookups` | `List<LookupDef>` | No | Each entry must include target (Table or Dataset) + join conditions | Ordered list of lookup joins |
+| `main_table` | `TableRef` | Yes | Must include a name and a valid Location definition | The primary table of the Dataset |
+| `lookups` | `List<LookupDef>` | No | Each entry must include target (TableRef or DatasetRef) + join conditions | Ordered list of lookup joins |
 | `created_at` | `Timestamp` | Yes | System-set on creation, immutable | Creation time |
 | `updated_at` | `Timestamp` | Yes | System-set on every change | Last modification time |
+
+### TableRef (embedded structure)
+
+| Attribute | Type | Required | Constraints | Description |
+|---|---|---|---|---|
+| `name` | `String` | Yes | Non-empty; unique within the Dataset | Logical name for the table within this Dataset |
+| `location` | `Location` | Yes | Must be a valid Location definition | Where the table's data physically resides |
+
+### Location (embedded structure — extensible by type)
+
+| Attribute | Type | Required | Constraints | Description |
+|---|---|---|---|---|
+| `type` | `Enum` | Yes | `database` \| `parquet` \| `csv` \| `api` \| extensible | Source type discriminator |
+| `options` | `Map<String, Any>` | Yes | Keys and values are type-specific (see below) | Connection and access properties for the given type |
+
+**Type-specific `options`:**
+
+| `type` | Required options | Optional options |
+|---|---|---|
+| `database` | `connection_string`, `table` | `schema` |
+| `parquet` | `path` | — |
+| `csv` | `path` | `delimiter` (default `,`), `has_header` (default `true`) |
+| `api` | `endpoint`, `method` | `auth`, `params`, `headers` |
+
+> `options` is intentionally open — new `type` values and their options can be introduced without changing the schema structure.
 
 ### LookupDef (embedded structure)
 
 | Attribute | Type | Required | Constraints | Description |
 |---|---|---|---|---|
-| `target` | `TableRef \| DatasetRef` | Yes | Must reference an existing Table or Dataset | The lookup target |
+| `target` | `TableRef \| DatasetRef` | Yes | TableRef requires a Location; DatasetRef references an existing Dataset by id | The lookup target |
 | `join_conditions` | `List<JoinCondition>` | Yes | At least one condition; each specifies FK column on both sides | Explicit foreign key join conditions |
 | `alias` | `String` | No | Unique within the Dataset | Optional alias for the lookup in DSL expressions |
 
@@ -48,7 +73,7 @@ A Dataset is the primary input definition for the computation engine. It specifi
 |---|---|---|---|
 | has main table | Table | 1:1 | Every Dataset has exactly one designated main table |
 | has lookups | Table or Dataset | 1:N | A Dataset has zero or more lookup definitions, each pointing to a Table or nested Dataset |
-| sourced from | DataSource | 1:N | Tables in a Dataset may come from multiple, different data sources (cross-source joins permitted) |
+| sourced from | DataSource | 1:N | Tables in a Dataset each carry an inline Location definition; a Dataset may span multiple source types and physical locations |
 | used by | Project | N:M | A Dataset is independent of any single Project and may be referenced by many Projects |
 
 ## Behaviors & Rules
@@ -62,6 +87,8 @@ A Dataset is the primary input definition for the computation engine. It specifi
 - **BR-007**: A Dataset that is referenced by one or more Projects MUST NOT be deleted. The preferred action is to disable it.
 - **BR-008**: A disabled Dataset MUST NOT be selectable for use in new Projects. Existing Project references to a disabled Dataset remain valid and unaffected.
 - **BR-009**: A Dataset is agnostic of how its relationships are materialised (eagerly flattened vs. resolved at runtime) — that decision belongs to the Project.
+- **BR-010**: Every TableRef in a Dataset (main table or lookup) MUST include a Location definition with a valid `type` and all required `options` for that type.
+- **BR-011**: The `type` field of a Location is the authoritative discriminator; any component consuming a Dataset MUST use it to determine how to access the data. Unknown types MUST be treated as an error.
 
 ## Lifecycle
 
@@ -84,10 +111,111 @@ A Dataset is mutable and evolves over time. Version is tracked automatically. De
 - This entity does NOT represent a query, computation, or result — it defines the input shape available to the computation engine.
 - This entity does NOT define what calculations are performed — that is the responsibility of the DSL and Computation Engine.
 
+## Serialization (YAML DSL)
+
+Schema for serializing a Dataset for inter-component communication.
+
+```yaml
+# dataset.schema.yaml
+dataset:
+  id: uuid                      # system-generated, immutable
+  name: string                  # required, non-empty
+  description: string           # optional
+  owner: string                 # required, user identifier
+  version: integer              # auto-incremented; starts at 1
+  status: active | disabled     # required; default: active
+  created_at: timestamp         # system-set on creation; ISO 8601; immutable
+  updated_at: timestamp         # system-set on every change; ISO 8601
+  main_table:
+    name: string                # required; logical name within this Dataset
+    location:
+      type: database | parquet | csv | api   # required; extensible discriminator
+      options:                               # required; keys depend on type
+        # database:   connection_string, table, [schema]
+        # parquet:    path
+        # csv:        path, [delimiter], [has_header]
+        # api:        endpoint, method, [auth], [params], [headers]
+        <key>: <value>
+  lookups:                      # optional; ordered list
+    - alias: string             # optional; must be unique within the Dataset
+      target:
+        type: table | dataset   # required; discriminator
+        # when type is `table`:
+        name: string            # logical name within this Dataset
+        location:
+          type: database | parquet | csv | api
+          options:
+            <key>: <value>
+        # when type is `dataset`:
+        id: uuid                # references an existing Dataset
+      join_conditions:          # required; at least one entry
+        - source_column: string # column on the parent (main table or parent lookup) side
+          target_column: string # column on this lookup's target side
+```
+
+> `created_at`, `updated_at`, and `version` are system-managed and MUST be treated as read-only by any component that consumes this format.
+> Adding a new source `type` requires only a new value for `type` and its corresponding `options` keys — no schema structure change needed.
+
+```yaml
+# Example: Orders (database) joined to customers (database, same server),
+#          region codes (CSV file), and a nested product-categories Dataset (cross-source API)
+dataset:
+  id: "d1a2b3c4-0000-0000-0000-000000000001"
+  name: "Sales Orders"
+  description: "Orders with customer details, region codes, and product category hierarchy"
+  owner: "user-marcos"
+  version: 4
+  status: active
+  created_at: "2026-02-21T10:00:00Z"
+  updated_at: "2026-02-21T15:45:00Z"
+  main_table:
+    name: orders
+    location:
+      type: database
+      options:
+        connection_string: "postgresql://host:5432/sales"
+        schema: public
+        table: orders
+  lookups:
+    - alias: customers
+      target:
+        type: table
+        name: customers
+        location:
+          type: database
+          options:
+            connection_string: "postgresql://host:5432/sales"
+            schema: public
+            table: customers
+      join_conditions:
+        - source_column: customer_id
+          target_column: id
+    - alias: region_codes
+      target:
+        type: table
+        name: region_codes
+        location:
+          type: csv
+          options:
+            path: "s3://my-bucket/reference/region_codes.csv"
+            has_header: true
+            delimiter: ","
+      join_conditions:
+        - source_column: region_id
+          target_column: code
+    - alias: product_categories
+      target:
+        type: dataset                        # nested Dataset — resolved separately
+        id: "d5e6f7g8-0000-0000-0000-000000000002"
+      join_conditions:
+        - source_column: product_id
+          target_column: product_id
+```
+
 ## Related Entities
 
 - [[Project]] — A Project references a Dataset to determine what data its computations operate on; multiple Projects may share the same Dataset.
 - [[Table]] — The primitive building block; a Dataset's main table and raw-table lookups are Tables.
-- [[DataSource]] — Tables in a Dataset are sourced from one or more DataSources; cross-source joins are permitted.
+- [[DataSource]] — Location is now defined inline on each TableRef; a Dataset may reference data across any number of source types (database, parquet, csv, api, etc.).
 - [[ComputationEngine]] — Consumes a Dataset as its primary input definition when executing DSL programs.
 - [[DSL]] — May request dynamic (runtime) joins on top of the Dataset's pre-defined structure.

@@ -52,6 +52,7 @@ Work through all of these, adapting sequence and depth to what the user reveals:
 5. **Behaviors & Rules** — What invariants or business rules govern it? What can/cannot happen to it?
 6. **Lifecycle** — Does it have states? What are the transitions? What creates, modifies, or destroys it?
 7. **Boundaries** — What is this entity explicitly NOT? What has been intentionally excluded?
+8. **Serialization** — How is this entity expressed in YAML for inter-component communication? What fields are required vs. optional in the serialized form? Are there naming conventions or constraints specific to the wire format?
 
 ### Sufficiency Test
 
@@ -63,6 +64,7 @@ You have enough information to write the document when:
 - At least the most important behaviors/rules are stated.
 - You know what creates and what destroys (or invalidates) the entity.
 - You know what this entity is not.
+- A YAML serialization schema and at least one concrete example are defined.
 
 If minor details are missing but not blocking, note them as `OPEN QUESTIONS` in the document rather than continuing to ask.
 
@@ -132,6 +134,35 @@ Questions that surfaced during definition and require resolution before planning
 ## Related Entities
 
 - [[<EntityName>]] — <one-line relationship summary>
+
+## Serialization (YAML DSL)
+
+A YAML schema for serializing this entity for communication between components.
+
+```yaml
+# <kebab-case-entity-name>.schema.yaml
+# Describes how a <Name> is expressed in the system's YAML DSL.
+
+<entity-name>:
+  # Required fields
+  <attribute>: <type>         # <constraint or description>
+
+  # Optional fields
+  <attribute>: <type>         # <constraint or description>
+
+  # Nested / embedded structures (if any)
+  <nested-key>:
+    - <field>: <type>         # <description>
+```
+
+> Include a concrete annotated example instance below the schema.
+
+```yaml
+# Example: <descriptive name of the example>
+<entity-name>:
+  <attribute>: <example-value>
+  ...
+```
 ```
 
 ## Completion
