@@ -200,6 +200,11 @@
   },
   "active": "57b760ba66d39c77",
   "lastOpenFiles": [
+    "docs/entities/calendarmapping.md",
+    "docs/entities/datasource.md",
+    "docs/entities/run.md",
+    "docs/entities/calendar.md",
+    "docs/entities/period.md",
     "docs/entities/project.md",
     "DobONoMoDo.md",
     "docs/entities/dataset.md",

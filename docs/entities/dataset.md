@@ -33,7 +33,12 @@ A Dataset is the primary input definition for the computation engine. It specifi
 | Attribute | Type | Required | Constraints | Description |
 |---|---|---|---|---|
 | `name` | `String` | Yes | Non-empty; unique within the Dataset | Logical name for the table within this Dataset |
-| `location` | `Location` | Yes | Must be a valid Location definition | Where the table's data physically resides |
+| `datasource_id` | `UUID` | No* | Must reference a valid, active DataSource; preferred over inline `location` | Reference to a named DataSource; table-specific detail (table name or relative path) supplied alongside |
+| `table` | `String` | No* | Required when `datasource_id` is a `database` type | Table name within the DataSource's database/schema |
+| `path` | `String` | No* | Required when `datasource_id` is a `parquet`, `csv`, or `api` type | Relative path/endpoint appended to the DataSource's `path_prefix` or `endpoint` |
+| `location` | `Location` | No* | Used for one-off connections when no DataSource is appropriate | Inline location definition; fallback when `datasource_id` is not provided |
+
+> \* Exactly one of `datasource_id` (+ `table`/`path` as appropriate) or `location` MUST be provided.
 
 ### Location (embedded structure — extensible by type)
 
@@ -258,7 +263,7 @@ dataset:
 
 - [[Project]] — A Project references a Dataset to determine what data its computations operate on; multiple Projects may share the same Dataset.
 - [[Table]] — The primitive building block; a Dataset's main table and raw-table lookups are Tables.
-- [[DataSource]] — Location is now defined inline on each TableRef; a Dataset may reference data across any number of source types (database, parquet, csv, api, etc.).
+- [[DataSource]] — The preferred way to define table connections in a Dataset; a TableRef references a DataSource by ID with only table-specific detail supplied inline. Inline Location remains available for one-off connections.
 - [[ComputationEngine]] — Consumes a Dataset as its primary input definition when executing DSL programs.
 - [[DSL]] — May request dynamic (runtime) joins on top of the Dataset's pre-defined structure.
 - [[Period]] — The `_period` metadata column on each row stores a Period string identifier; the Period entity defines its meaning, boundaries, and rollup hierarchy.
