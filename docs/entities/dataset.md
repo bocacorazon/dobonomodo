@@ -34,8 +34,8 @@ A Dataset is the primary input definition for the computation engine. It specifi
 | Attribute | Type | Required | Constraints | Description |
 |---|---|---|---|---|
 | `name` | `String` | Yes | Non-empty; unique within the Dataset | Logical name for the table within this Dataset |
+| `temporal_mode` | `Enum` | No | `period \| bitemporal`; default `period` | How time-partitioning works for this table. `period`: rows have `_period` (exact match filter). `bitemporal`: rows have `_period_from`/`_period_to` (asOf filter). Each table declares its own mode independently — a lookup's `temporal_mode` does not affect the main table or other lookups |
 | `columns` | `List<ColumnDef>` | Yes | At least one column; names must not use `_` prefix | Explicit schema definition for this table |
-| `bitemporal` | `Boolean` | No | Default `false`; when `true`, replaces `_period` with `_period_from`/`_period_to` and adds `_valid_from`/`_valid_to` on rows | Enables bitemporal tracking on this table — see [[Bitemporal Dataset]] |
 
 ### ColumnDef (embedded structure)
 
@@ -63,7 +63,9 @@ A Dataset is the primary input definition for the computation engine. It specifi
 
 ### Row Metadata (system-managed — present on every row of a Dataset output)
 
-All system metadata column names are prefixed with `_` and MUST NOT conflict with user-defined column names.
+All system metadata column names are prefixed with `_` and MUST NOT conflict with user-defined column names. The period-related system columns differ by `temporal_mode`.
+
+**Columns present in both modes:**
 
 | Column | Type | Mutable | Description |
 |---|---|---|---|
@@ -74,9 +76,23 @@ All system metadata column names are prefixed with `_` and MUST NOT conflict wit
 | `_created_by_run_id` | `UUID` | No | ID of the specific Run execution that produced this row |
 | `_created_at` | `Timestamp` | No | When the row was first produced; ISO 8601 |
 | `_updated_at` | `Timestamp` | Yes | When the row was last modified by any operation; ISO 8601 |
-| `_period` | `String` | No | A string identifier referencing a Period entity (e.g., `"2026-01"`, `"FY2026-Q1"`); meaning and rollup rules are defined by the Period entity | The period this row belongs to; set at import time or inherited from the Project Run |
 | `_deleted` | `Boolean` | Yes | Default `false`. Set to `true` by a `delete` operation. Rows with `_deleted = true` are excluded from all subsequent pipeline operations and from `output` by default |
 | `_labels` | `Map<String, String>` | Yes | User-defined key-value tags; any operation may add, update, or remove entries |
+
+**Period columns — `temporal_mode: period`:**
+
+| Column | Type | Mutable | Description |
+|---|---|---|---|
+| `_period` | `String` | No | The Period identifier this row belongs to (e.g., `"2026-01"`, `"FY2026-Q1"`). Set at import time. The engine filters rows for a Run by matching `_period = requested_period.identifier` |
+
+**Period columns — `temporal_mode: bitemporal`:**
+
+| Column | Type | Mutable | Description |
+|---|---|---|---|
+| `_period_from` | `Date` | No | Start date (inclusive) of the Period range this row is valid for |
+| `_period_to` | `Date` | No | End date (exclusive) of the Period range this row is valid for. `NULL` means open-ended |
+
+> For bitemporal Datasets, the engine performs an **asOf query**: it selects rows where `_period_from <= run_period.start_date AND (_period_to IS NULL OR _period_to > run_period.start_date)`. Non-overlapping ranges for the same logical entity are a **data contract** — the engine does not enforce this rule but documents it as an invariant that data producers must honour.
 
 ## Relationships
 
@@ -106,8 +122,11 @@ All system metadata column names are prefixed with `_` and MUST NOT conflict wit
 - **BR-015**: Lineage columns (`_source_dataset_id`, `_source_table`, `_created_by_project_id`, `_created_by_run_id`, `_created_at`) are immutable once set on a row.
 - **BR-016**: `_labels` is mutable. Any operation in a Project MAY add, update, or remove entries. Label keys and values are user-defined strings with no system-imposed schema.
 - **BR-017**: `_updated_at` MUST be updated by the system whenever any operation modifies a row, including label changes.
-- **BR-018**: `_period` is an optional string identifier whose meaning is governed by the Period entity. It MAY be set at import time or inherited from the Run that produced the row. Any operation MAY update `_period` on a row.
-- **BR-019**: `_deleted` is set to `false` on all rows when first produced. Only a `delete` operation may set it to `true`. Once set, the engine automatically excludes the row from all subsequent operations and from `output` writes (unless `include_deleted: true` is set on the `output` operation).
+- **BR-018**: Each `TableRef` independently declares its `temporal_mode`. This does NOT propagate — a lookup with `temporal_mode: bitemporal` does not affect the main table or any other lookup.
+- **BR-019**: For a `TableRef` with `temporal_mode: period`, the system column `_period` (String) is present on its rows. The engine filters rows for a Run by `_period = run_period.identifier`.
+- **BR-020**: For a `TableRef` with `temporal_mode: bitemporal`, `_period` is absent. Instead `_period_from` (Date, non-nullable) and `_period_to` (Date, nullable — NULL means open-ended) are present. The engine applies an asOf query: `_period_from <= run_period.start_date AND (_period_to IS NULL OR _period_to > run_period.start_date)`.
+- **BR-021**: For bitemporal tables, periods for the same logical entity MUST NOT overlap. This is a **data contract** enforced by the data producer, not by the engine. Violations produce undefined query results.
+- **BR-022**: `_deleted` is set to `false` on all rows when first produced. Only a `delete` operation may set it to `true`. Once set, the engine automatically excludes the row from all subsequent operations and from `output` writes (unless `include_deleted: true` is set on the `output` operation).
 
 ## Lifecycle
 
@@ -150,7 +169,7 @@ dataset:
   natural_key_columns: [string] # optional; column names from main_table that form the natural key
   main_table:
     name: string                # required; logical name within this Dataset
-    bitemporal: boolean         # optional; default false
+    temporal_mode: period | bitemporal  # optional; default: period
     columns:                    # required; at least one
       - name: string            # required; no _ prefix
         type: string | integer | decimal | boolean | date | timestamp
@@ -162,7 +181,7 @@ dataset:
         type: table | dataset   # required; discriminator
         # when type is `table`:
         name: string            # logical name within this Dataset
-        bitemporal: boolean     # optional; default false
+        temporal_mode: period | bitemporal  # optional; default: period
         columns:
           - name: string
             type: string | integer | decimal | boolean | date | timestamp
@@ -179,18 +198,25 @@ dataset:
 The following metadata columns are automatically present on **every row** of a Dataset output. They are not declared in the Dataset definition — they are injected by the system at runtime.
 
 ```yaml
-# Row metadata (system-managed, inline on every row — not declared in dataset definition)
+# Row metadata — system-managed, inline on every row (not declared in dataset definition)
+# Always present:
 _row_id: uuid-v7              # system-generated, time-ordered, immutable
-_source_dataset_id: uuid      # ID of the originating Dataset
-_source_table: string         # logical name of the originating table
-_created_by_project_id: uuid  # ID of the Project that produced this row
-_created_by_run_id: uuid      # ID of the Run execution that produced this row
+_source_dataset_id: uuid
+_source_table: string
+_created_by_project_id: uuid
+_created_by_run_id: uuid
 _created_at: timestamp        # ISO 8601; immutable
 _updated_at: timestamp        # ISO 8601; updated on every modification
-_deleted: boolean             # default false; set true by delete operation; excluded from pipeline by default
-_period: string               # optional; period identifier (e.g. "2026-01"); meaning defined by Period entity
+_deleted: boolean             # default false; set true by delete operation
 _labels:                      # user-defined key-value tags; mutable by any operation
   <key>: <value>
+
+# temporal_mode: period (default)
+_period: string               # period identifier (e.g. "2026-01"); filtered by exact match
+
+# temporal_mode: bitemporal (replaces _period)
+_period_from: date            # start of validity range (inclusive)
+_period_to: date              # end of validity range (exclusive); null = open-ended
 ```
 
 ```yaml
@@ -208,6 +234,7 @@ dataset:
   natural_key_columns: [order_number]
   main_table:
     name: orders
+    temporal_mode: period       # default; rows filtered by _period = run_period.identifier
     columns:
       - name: order_number
         type: string

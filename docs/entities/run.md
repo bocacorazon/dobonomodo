@@ -42,6 +42,15 @@ A full copy of the Project definition captured immutably at execution time.
 | `input_dataset_version` | `Integer` | The pinned Dataset version at time of execution |
 | `materialization` | `Enum` | `eager` \| `runtime` — the strategy in effect |
 | `operations` | `List<OperationInstance>` | Full ordered operation list with all parameters |
+| `resolver_snapshots` | `List<ResolverSnapshot>` | One entry per Dataset resolved during this Run; records the exact Resolver used for reproducibility |
+
+### ResolverSnapshot (embedded within ProjectSnapshot)
+
+| Attribute | Type | Description |
+|---|---|---|
+| `dataset_id` | `UUID` | The Dataset for which the Resolver was used |
+| `resolver_id` | `String` | The Resolver's stable identifier |
+| `resolver_version` | `Integer` | The Resolver version at time of execution |
 
 ### ErrorDetail (embedded structure)
 
@@ -122,6 +131,10 @@ run:
         alias: string               # optional
         parameters:
           <key>: <value>
+    resolver_snapshots:             # one entry per Dataset resolved during this Run
+      - dataset_id: uuid
+        resolver_id: string
+        resolver_version: integer
   period_ids: [uuid]                # required; at least one
   status: queued | running | completed | failed | cancelled  # required
   trigger_type: manual | scheduled  # required

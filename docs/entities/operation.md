@@ -37,12 +37,13 @@ Modifies column values on matching rows. Can update existing columns, add new co
 
 #### RuntimeJoin (embedded structure)
 
-A `RuntimeJoin` fetches a related table or Dataset at operation time and makes its columns available under an `alias` for use in any assignment expression within the same `update`.
+A `RuntimeJoin` loads a Dataset at operation time and makes its columns available under an `alias` for use in any assignment expression within the same `update`. The join Dataset is resolved via the Resolver using the same precedence as the input Dataset (Project `resolver_overrides` → Dataset `resolver_id` → system default) and period-filtered according to the join Dataset's `temporal_mode`.
 
 | Field | Type | Required | Description |
 |---|---|---|---|
 | `alias` | `String` | Yes | Logical name used to reference joined columns in expressions (e.g., `alias: customers` → `customers.tier`) |
-| `source` | `TableRef` | Yes | Table or Dataset to join against at runtime |
+| `dataset_id` | `UUID` | Yes | References an existing Dataset to join against |
+| `dataset_version` | `Integer` | No | When set, pins to this specific Dataset version. When omitted, resolves to the latest active version at Run time |
 | `on` | `Expression` | Yes | Boolean join condition referencing working dataset and/or other join aliases |
 
 #### Assignment (embedded structure)
@@ -142,6 +143,9 @@ The engine substitutes the named selector's expression before evaluation. Named 
 | BR-006 | A named selector referenced as `{{NAME}}` MUST be defined in the enclosing Project's `selectors` map. Referencing an undefined name is a compile-time error. |
 | BR-007 | Each `update` assignment MUST have an `expression`. Column references in that expression MAY include aliases defined in the same operation's `joins` list. |
 | BR-008 | `update` joins are operation-scoped — their aliases are not visible to any other operation in the pipeline. |
+| BR-008a | A RuntimeJoin's `dataset_id` MUST reference an existing, active Dataset. The Resolver used to load the join Dataset follows the same precedence as the input Dataset: Project `resolver_overrides` → Dataset `resolver_id` → system default. |
+| BR-008b | A RuntimeJoin Dataset is period-filtered according to its own `temporal_mode`: `period` tables use `_period = run_period.identifier`; `bitemporal` tables use the asOf query. The Run's current Period is always used — there is no per-join Period override. |
+| BR-008c | When `dataset_version` is omitted on a RuntimeJoin, the engine resolves to the latest active version of the Dataset at Run time. When set, the pinned version is used. The resolved version is captured in the Run's ProjectSnapshot `resolver_snapshots`. |
 | BR-009 | `aggregate` appends new rows; it does NOT replace or remove existing rows in the working dataset. |
 | BR-009 | In `append`, every column on the incoming rows MUST match an existing column in the working dataset. Additional columns on the working dataset that are absent from incoming rows are set to `NULL`. |
 | BR-010 | In `append`, every column on the incoming rows MUST match an existing column in the working dataset. Additional columns on the working dataset that are absent from incoming rows are set to `NULL`. |
@@ -165,9 +169,9 @@ Operations have no independent lifecycle. They are created, modified, and delete
 |---|---|
 | Project | An Operation belongs to exactly one Project; a Project contains an ordered list of Operations |
 | Expression | Selectors and argument values are inline Expressions |
-| Dataset | Column references in Expressions resolve against the Project's input Dataset |
+| Dataset | Column references in Expressions resolve against the Project's input Dataset; RuntimeJoin `dataset_id` references Datasets loaded at operation time |
 | Run | At execution, Operations are compiled from the immutable ProjectSnapshot |
-| DataSource / TableRef | `update` (RuntimeJoin) and `output` reference external data locations |
+| Resolver | RuntimeJoin Datasets are loaded via the Resolver using the same precedence as the input Dataset |
 
 ---
 
@@ -212,7 +216,8 @@ operation:
 arguments:
   joins:                        # optional; defines columns available to assignment expressions
     - alias: string             # logical name used in expressions (e.g., "customers")
-      source: <TableRef>
+      dataset_id: uuid          # references an existing Dataset
+      dataset_version: integer  # optional; pin to specific version; omit for latest at Run time
       on: <expression>          # boolean join condition
   assignments:
     - column: string
@@ -278,9 +283,7 @@ arguments:
   arguments:
     joins:
       - alias: "customers"
-        source:
-          datasource_id: "ds-customers"
-          table: "customers"
+        dataset_id: "d5e6f7g8-0000-0000-0000-000000000010"
         on: "orders.customer_id = customers.id"
     assignments:
       - column: "customer_tier"

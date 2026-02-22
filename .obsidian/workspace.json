@@ -198,8 +198,13 @@
       "bases:Create new base": false
     }
   },
-  "active": "57b760ba66d39c77",
+  "active": "5346e1073dac9bb4",
   "lastOpenFiles": [
+    "docs/capabilities/execute-test-scenario.md",
+    "docs/capabilities/activate-project.md",
+    "docs/entities/resolver.md",
+    "docs/discussion/2026-02-21-session.md",
+    "docs/discussion",
     "docs/capabilities/trace-run-execution.md",
     "docs/capabilities/resolve-dataset.md",
     "docs/capabilities/execute-project-calculation.md",

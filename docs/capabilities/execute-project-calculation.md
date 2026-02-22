@@ -89,4 +89,4 @@ In both cases the system creates a Run record and begins execution.
 
 - [ ] Should the system support a **dry-run mode** — executing the pipeline without writing any output — to validate expressions and data availability before committing?
 - [ ] When `register_as_dataset` creates a new Dataset version, should the old version remain accessible to other Projects, or should they be notified of the new version (triggering the Project conflict model)?
-- [ ] How is the **Period filter** applied to the input Dataset exactly — by matching `_period` (or `_period_from`/`_period_to` for bitemporal tables) on the rows, or by some other mechanism?
+- [x] How is the **Period filter** applied to the input Dataset exactly? — **Resolved**: Dataset declares `temporal_mode: period | bitemporal`. For `period` mode, engine filters `_period = run_period.identifier`. For `bitemporal` mode, engine applies asOf query: `_period_from <= run_period.start_date AND (_period_to IS NULL OR _period_to > run_period.start_date)`. Non-overlap is a data contract, not enforced by engine. See `dataset.md` BR-018–BR-020.

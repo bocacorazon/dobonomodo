@@ -28,6 +28,7 @@ A Project is the central unit of computation intent in DobONoMoDo. Without it, t
 | `materialization` | `Enum` | Yes | `eager` \| `runtime` | How pre-defined Dataset joins are resolved; applies to all joins uniformly |
 | `operations` | `List<OperationInstance>` | Yes | At least one entry; executed in declared order | The ordered sequence of operations that constitute the recipe |
 | `selectors` | `Map<String, Expression>` | No | Keys are unique names (no spaces); values are boolean Expression strings | Named, reusable row filters scoped to this Project. Referenced in Operation `selector` fields as `{{NAME}}` |
+| `resolver_overrides` | `Map<UUID, String>` | No | Keys are Dataset IDs referenced in operations; values are Resolver `id`s | Per-Dataset Resolver overrides for this Project; takes precedence over the Dataset's own `resolver_id`. Useful for testing against alternative data sources |
 | `conflict_report` | `ConflictReport` | No | Present only when `status` is `conflict` | Describes which Dataset changes broke which operations |
 | `created_at` | `Timestamp` | Yes | System-set on creation; immutable | Creation time |
 | `updated_at` | `Timestamp` | Yes | System-set on every change | Last modification time |
@@ -81,9 +82,10 @@ A Project is the central unit of computation intent in DobONoMoDo. Without it, t
 - **BR-007**: The `materialization` strategy applies uniformly to all pre-defined joins in the input Dataset. Per-operation dynamic joins to additional tables are still permitted regardless of the strategy.
 - **BR-008**: Version MUST be auto-incremented on every structural change (addition, removal, or modification of any operation or parameter; change of input Dataset or materialization strategy).
 - **BR-009**: An `inactive` Project MUST NOT be executed (no new Runs may be created from it). Existing Runs are unaffected.
-- **BR-010**: A `draft` Project MAY be edited freely but MUST NOT be executed until its status is set to `active`.
+- **BR-010**: A `draft` Project MAY be edited freely and MAY be executed (manual Runs only), but all `output` operation writes are redirected to the deployment-level sandbox DataSource. Draft Projects MUST NOT write to production destinations.
 - **BR-011**: `visibility` is user-controlled. A `private` Project is accessible only to its owner. A `public` Project is accessible to all users but may only be modified by its owner.
-- **BR-012**: When a Project is activated, it MUST pin to the current version of its input Dataset (`input_dataset_version`). The pinned version changes only on an explicit user-initiated upgrade.
+- **BR-012**: When a Project is activated, the user MUST confirm which version of the input Dataset to pin. `input_dataset_version` is set at that point and changes only on a subsequent explicit activation.
+- **BR-012a**: Structural changes to an `active` Project (operations, `input_dataset_id`, `materialization`) MUST automatically revert it to `draft`. Metadata changes (`name`, `description`, `visibility`, `selectors`, `resolver_overrides`) do NOT trigger reversion.
 - **BR-013**: When the input Dataset receives a new version, the system MUST automatically perform impact analysis against the Project's pinned version. A breaking change is any structural change (column removal, rename, or type change) affecting a column referenced in any operation's parameters.
 - **BR-014**: Non-breaking Dataset changes (e.g., new columns or tables added) MUST be offered to the user as an optional upgrade. They MUST NOT automatically change `input_dataset_version` or affect Project execution.
 - **BR-015**: Breaking Dataset changes MUST transition the Project to `conflict` status and populate `conflict_report`. A `conflict` Project MUST NOT be executed until the conflict is resolved.
@@ -96,10 +98,10 @@ A Project is a long-lived, reusable recipe. Execution state is tracked by the Ru
 
 | State | Description | Transitions To |
 |---|---|---|
-| `draft` | Being assembled; not yet executable | `active` |
-| `active` | Fully defined and executable; can be run and referenced by other Projects | `draft` (to revise), `inactive`, `conflict` |
-| `conflict` | A breaking Dataset change was detected; execution blocked until resolved | `active` (on resolution) |
-| `inactive` | No longer executable; cannot be used in new Runs or referenced as a new sub-project | `active` (if re-activated) |
+| `draft` | Development mode — freely editable and manually runnable; all outputs go to sandbox DataSource | `active` (on successful activation) |
+| `active` | Production mode — outputs go to configured destinations; structural edits revert to `draft` | `draft` (structural edit), `inactive` (manual deactivation), `conflict` (breaking Dataset change) |
+| `conflict` | A breaking Dataset change was detected; execution blocked until resolved | `draft` (on conflict resolution) |
+| `inactive` | Suspended — not executable; no scheduled or manual Runs; no new sub-project references | `draft` (re-opened for editing) |
 
 **What creates a Project**: A user explicitly creates it, designating an input Dataset, a materialization strategy, and an ordered list of operations.  
 **What modifies a Project**: Any change to the operation sequence, parameters, input Dataset, materialization strategy, visibility, or status. Each modification auto-increments the version.  
