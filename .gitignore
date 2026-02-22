@@ -20,7 +20,7 @@ Thumbs.db
 .idea/
 
 # Generated/spec session artifacts
-.specstory/
+#.specstory/
 
 # Agent runtime artifacts (generated during orchestrated runs)
 .agent-status
