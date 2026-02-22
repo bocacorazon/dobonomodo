@@ -1,0 +1,25 @@
+{
+  "inputs": [
+    {
+      "type": "promptString",
+      "id": "postgres-url",
+      "description": "PostgreSQL connection URL",
+      "password": true
+    }
+  ],
+  "servers": {
+    "postgres": {
+      "type": "stdio",
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-postgres", "${input:postgres-url}"]
+    },
+    "kubernetes": {
+      "type": "stdio",
+      "command": "npx",
+      "args": ["mcp-server-kubernetes"],
+      "env": {
+        "ALLOW_ONLY_NON_DESTRUCTIVE_TOOLS": "true"
+      }
+    }
+  }
+}

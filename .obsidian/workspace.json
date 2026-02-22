@@ -200,6 +200,7 @@
   },
   "active": "57b760ba66d39c77",
   "lastOpenFiles": [
+    "docs/discussion/2026-02-22-session.md",
     "docs/specs/S21-api-server/prompt.md",
     "docs/specs/S20-cli/prompt.md",
     "docs/specs/S19-engine-worker/prompt.md",
@@ -234,7 +235,6 @@
     "docs/specs/S13-activation-validation",
     "docs/specs/S12-trace-engine",
     "docs/architecture/sample-datasets.md",
-    "docs/architecture/implementation-plan.md",
-    "docs/architecture/system-architecture.md"
+    "docs/architecture/implementation-plan.md"
   ]
 }

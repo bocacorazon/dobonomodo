@@ -1,1 +1,0 @@
-I am a computation engine that performs calculations over a [[Dataset|dataset]]. The calculations are prescribed in a DSL that defines a limited -but extensible- set of operations to be performed on the dataset. 
