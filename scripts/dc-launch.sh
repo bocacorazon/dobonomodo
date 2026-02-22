@@ -56,18 +56,29 @@ else
     echo "  WARNING: copilot binary not found on host"
 fi
 
-# Forward host copilot config if it exists
-COPILOT_CONFIG_MOUNT=""
-COPILOT_CONFIG_DIR="${HOME}/.config/github-copilot"
-if [ -d "$COPILOT_CONFIG_DIR" ]; then
-    COPILOT_CONFIG_MOUNT="-v $COPILOT_CONFIG_DIR:/home/agent/.config/github-copilot:ro"
+# Resolve GitHub auth token for the container.
+# gh stores tokens in the system keyring, which isn't accessible inside Docker.
+# Extract token via gh CLI and pass it as an env var.
+GH_AUTH_TOKEN="${GITHUB_TOKEN:-${GH_TOKEN:-}}"
+if [ -z "$GH_AUTH_TOKEN" ]; then
+    GH_AUTH_TOKEN="$(gh auth token 2>/dev/null || echo "")"
+fi
+if [ -z "$GH_AUTH_TOKEN" ]; then
+    echo "WARNING: No GitHub auth token found. Run 'gh auth login' on host." >&2
 fi
 
-# Forward gh auth if it exists
+# Forward gh config for non-token settings
 GH_CONFIG_MOUNT=""
 GH_CONFIG_DIR="${HOME}/.config/gh"
 if [ -d "$GH_CONFIG_DIR" ]; then
     GH_CONFIG_MOUNT="-v $GH_CONFIG_DIR:/home/agent/.config/gh:ro"
+fi
+
+# Forward copilot config if it exists
+COPILOT_HOME_MOUNT=""
+COPILOT_HOME="${HOME}/.copilot"
+if [ -d "$COPILOT_HOME" ]; then
+    COPILOT_HOME_MOUNT="-v $COPILOT_HOME:/home/agent/.copilot:ro"
 fi
 
 # shellcheck disable=SC2086
@@ -78,13 +89,12 @@ docker run -d \
     -v dobonomodo-cargo-registry:/home/agent/.cargo/registry \
     -v dobonomodo-cargo-git:/home/agent/.cargo/git \
     $COPILOT_MOUNT \
-    $COPILOT_CONFIG_MOUNT \
     $GH_CONFIG_MOUNT \
+    $COPILOT_HOME_MOUNT \
     -e "SPECIFY_FEATURE=${BRANCH}" \
     -e "CARGO_TARGET_DIR=${CARGO_TARGET}" \
-    -e "GITHUB_TOKEN=${GITHUB_TOKEN:-}" \
-    -e "GH_TOKEN=${GH_TOKEN:-}" \
-    -e "COPILOT_TOKEN=${COPILOT_TOKEN:-}" \
+    -e "GITHUB_TOKEN=${GH_AUTH_TOKEN}" \
+    -e "GH_TOKEN=${GH_AUTH_TOKEN}" \
     "$IMAGE_NAME" \
     bash -c "cd /workspace && bash scripts/agent-run.sh $SPEC_ID"
 
