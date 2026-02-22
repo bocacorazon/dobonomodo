@@ -49,7 +49,7 @@ Multiple specs were implemented in parallel and merged to develop. Review the co
 For each issue found, classify as CRITICAL, IMPORTANT, or MINOR (same as per-spec reviews).
 If no issues found, output: 'Integration review: CLEAN'."
 
-if copilot --prompt "$REVIEW_PROMPT" 2>&1 | tee "$REVIEW_OUTPUT"; then
+if copilot -p "$REVIEW_PROMPT" --yolo --no-ask-user 2>&1 | tee "$REVIEW_OUTPUT"; then
     echo "Integration review saved: $REVIEW_OUTPUT"
 else
     echo "WARNING: Integration review command failed, proceeding without review"
@@ -65,7 +65,7 @@ if grep -qi "CRITICAL" "$REVIEW_OUTPUT" 2>/dev/null; then
     git checkout -b "$FIX_BRANCH"
 
     # Attempt auto-fix
-    copilot --prompt "Fix all CRITICAL integration issues identified in .phase-review-${PHASE_ID}.md. Ensure the workspace builds, tests pass, and clippy is clean." 2>&1 || true
+    copilot -p "Fix all CRITICAL integration issues identified in .phase-review-${PHASE_ID}.md. Ensure the workspace builds, tests pass, and clippy is clean." --yolo --no-ask-user 2>&1 || true
 
     # Re-run quality gates
     echo "Re-running quality gates after integration fixes..."

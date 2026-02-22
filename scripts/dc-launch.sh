@@ -46,12 +46,40 @@ echo "  Worktree: $WORKTREE_DIR"
 echo "  Branch: $BRANCH"
 echo "  Spec: $SPEC_ID"
 
+# Locate host copilot binary
+COPILOT_BIN="$(command -v copilot 2>/dev/null || echo "")"
+COPILOT_MOUNT=""
+if [ -n "$COPILOT_BIN" ] && [ -f "$COPILOT_BIN" ]; then
+    COPILOT_MOUNT="-v $COPILOT_BIN:/usr/local/bin/copilot:ro"
+    echo "  Copilot binary: $COPILOT_BIN (mounted into container)"
+else
+    echo "  WARNING: copilot binary not found on host"
+fi
+
+# Forward host copilot config if it exists
+COPILOT_CONFIG_MOUNT=""
+COPILOT_CONFIG_DIR="${HOME}/.config/github-copilot"
+if [ -d "$COPILOT_CONFIG_DIR" ]; then
+    COPILOT_CONFIG_MOUNT="-v $COPILOT_CONFIG_DIR:/home/agent/.config/github-copilot:ro"
+fi
+
+# Forward gh auth if it exists
+GH_CONFIG_MOUNT=""
+GH_CONFIG_DIR="${HOME}/.config/gh"
+if [ -d "$GH_CONFIG_DIR" ]; then
+    GH_CONFIG_MOUNT="-v $GH_CONFIG_DIR:/home/agent/.config/gh:ro"
+fi
+
+# shellcheck disable=SC2086
 docker run -d \
     --name "$CONTAINER_NAME" \
     --network host \
     -v "$WORKTREE_DIR:/workspace" \
     -v dobonomodo-cargo-registry:/home/agent/.cargo/registry \
     -v dobonomodo-cargo-git:/home/agent/.cargo/git \
+    $COPILOT_MOUNT \
+    $COPILOT_CONFIG_MOUNT \
+    $GH_CONFIG_MOUNT \
     -e "SPECIFY_FEATURE=${BRANCH}" \
     -e "CARGO_TARGET_DIR=${CARGO_TARGET}" \
     -e "GITHUB_TOKEN=${GITHUB_TOKEN:-}" \

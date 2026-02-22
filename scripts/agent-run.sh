@@ -64,12 +64,12 @@ run_speckit_stage() {
     fi
 
     log "  $stage: running..."
-    if copilot agent "$stage" 2>&1 | tee -a "$LOG_FILE"; then
+    if copilot -p "Run the $stage workflow for this feature." --agent "$stage" --yolo --no-ask-user 2>&1 | tee -a "$LOG_FILE"; then
         log "  $stage: complete"
         return 0
     else
         log "  $stage: FAILED, retrying once..."
-        if copilot agent "$stage" 2>&1 | tee -a "$LOG_FILE"; then
+        if copilot -p "Run the $stage workflow for this feature." --agent "$stage" --yolo --no-ask-user 2>&1 | tee -a "$LOG_FILE"; then
             log "  $stage: complete (retry)"
             return 0
         else
@@ -100,7 +100,7 @@ if ! run_speckit_stage "speckit.tasks" "$TASKS"; then
 fi
 
 log "  speckit.implement: running..."
-if ! copilot agent "speckit.implement" 2>&1 | tee -a "$LOG_FILE"; then
+if ! copilot -p "Execute the implementation plan by processing all tasks." --agent "speckit.implement" --yolo --no-ask-user 2>&1 | tee -a "$LOG_FILE"; then
     log "  speckit.implement: FAILED"
     set_status "FAILED"
     exit 1
@@ -141,7 +141,7 @@ run_quality_gates() {
 
 if ! run_quality_gates; then
     log "Quality gates failed, attempting auto-fix..."
-    copilot --prompt "Fix all cargo build errors, test failures, clippy warnings, and formatting issues in this workspace. Run cargo fmt --all first." 2>&1 | tee -a "$LOG_FILE" || true
+    copilot -p "Fix all cargo build errors, test failures, clippy warnings, and formatting issues in this workspace. Run cargo fmt --all first." --yolo --no-ask-user 2>&1 | tee -a "$LOG_FILE" || true
     if ! run_quality_gates; then
         log "Quality gates still failing after auto-fix"
         set_status "FAILED"
@@ -166,7 +166,7 @@ run_code_review() {
     review_prompt="${review_prompt//\{\{SPEC_ID\}\}/$SPEC_ID}"
     review_prompt="${review_prompt//\{\{BRANCH_NAME\}\}/$BRANCH}"
 
-    copilot --prompt "$review_prompt" 2>&1 | tee "$REVIEW_FILE" | tee -a "$LOG_FILE" || true
+    copilot -p "$review_prompt" --yolo --no-ask-user 2>&1 | tee "$REVIEW_FILE" | tee -a "$LOG_FILE" || true
     cp "$REVIEW_FILE" "$REVIEW_HISTORY/round-${round}.md"
 
     rm -f "$diff_file"
@@ -193,12 +193,12 @@ while [ "$REVIEW_ROUND" -le "$MAX_REVIEW_ROUNDS" ]; do
     if [ "$REVIEW_ROUND" -lt "$MAX_REVIEW_ROUNDS" ]; then
         # --- Step 5: Fix cycle ---
         log "  Entering fix cycle..."
-        copilot --prompt "Fix all CRITICAL and IMPORTANT issues identified in the code review. The review findings are in .agent-review. Address each finding and ensure quality gates still pass." 2>&1 | tee -a "$LOG_FILE" || true
+        copilot -p "Fix all CRITICAL and IMPORTANT issues identified in the code review. The review findings are in .agent-review. Address each finding and ensure quality gates still pass." --yolo --no-ask-user 2>&1 | tee -a "$LOG_FILE" || true
 
         # Re-run quality gates after fixes
         if ! run_quality_gates; then
             log "Quality gates failed after review fixes, attempting auto-fix..."
-            copilot --prompt "Fix all cargo build errors, test failures, clippy warnings, and formatting issues." 2>&1 | tee -a "$LOG_FILE" || true
+            copilot -p "Fix all cargo build errors, test failures, clippy warnings, and formatting issues." --yolo --no-ask-user 2>&1 | tee -a "$LOG_FILE" || true
             if ! run_quality_gates; then
                 log "Quality gates still failing"
                 set_status "FAILED"
