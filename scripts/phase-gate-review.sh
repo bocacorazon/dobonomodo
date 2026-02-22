@@ -56,8 +56,19 @@ else
     echo "Integration review: SKIPPED (command failed)" > "$REVIEW_OUTPUT"
 fi
 
-# Check for CRITICAL findings
-if grep -qi "CRITICAL" "$REVIEW_OUTPUT" 2>/dev/null; then
+# Check for CRITICAL findings.
+# Avoid false positives from summary lines like "CRITICAL: 0".
+CRITICAL_COUNT="$(awk 'BEGIN{IGNORECASE=1} /CRITICAL:[[:space:]]*[0-9]+/ { line=$0; sub(/.*CRITICAL:[[:space:]]*/, "", line); sub(/[^0-9].*/, "", line); print line; exit }' "$REVIEW_OUTPUT" 2>/dev/null || true)"
+HAS_CRITICAL=false
+if [ -n "$CRITICAL_COUNT" ]; then
+    if [ "$CRITICAL_COUNT" -gt 0 ]; then
+        HAS_CRITICAL=true
+    fi
+elif grep -Eqi '^###\s*\[?CRITICAL\]?|^\s*-\s*\*\*CRITICAL\*\*|^\s*\[CRITICAL\]' "$REVIEW_OUTPUT" 2>/dev/null; then
+    HAS_CRITICAL=true
+fi
+
+if [ "$HAS_CRITICAL" = true ]; then
     echo ""
     echo "⚠️  CRITICAL integration issues found. Creating fix branch..."
 
