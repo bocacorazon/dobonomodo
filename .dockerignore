@@ -1,0 +1,13 @@
+target/
+debug/
+release/
+.git/
+.gitignore
+Dockerfile*
+.dockerignore
+*.log*
+.env*
+coverage/
+tmp/
+.DS_Store
+Thumbs.db
