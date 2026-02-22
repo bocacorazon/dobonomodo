@@ -37,6 +37,18 @@ WORKTREE_DIR="$WORKTREE_BASE/dobonomodo-${SPEC_ID}"
 
 if [ -d "$WORKTREE_DIR" ]; then
     echo "Worktree already exists: $WORKTREE_DIR"
+    # When resuming a failed run, keep automation scripts current by syncing base branch.
+    if git -C "$WORKTREE_DIR" diff --quiet && git -C "$WORKTREE_DIR" diff --cached --quiet; then
+        if git -C "$WORKTREE_DIR" merge --ff-only "$BASE_BRANCH" >/dev/null 2>&1; then
+            echo "Fast-forwarded $BRANCH to latest $BASE_BRANCH"
+        elif git -C "$WORKTREE_DIR" merge --no-edit "$BASE_BRANCH" >/dev/null 2>&1; then
+            echo "Merged latest $BASE_BRANCH into $BRANCH"
+        else
+            echo "Warning: Could not sync $BRANCH with $BASE_BRANCH automatically" >&2
+        fi
+    else
+        echo "Info: Worktree has local changes; skipping automatic $BASE_BRANCH sync"
+    fi
     echo "WORKTREE_DIR=$WORKTREE_DIR"
     echo "BRANCH=$BRANCH"
     exit 0
