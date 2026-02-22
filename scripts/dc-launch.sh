@@ -29,6 +29,11 @@ if [ -f "$WORKTREE_DIR/.env.agent" ]; then
     CARGO_TARGET="${CARGO_TARGET_DIR:-/workspace/.cargo-target}"
 fi
 
+# agent-run executes inside container and should always write to /workspace.
+if [[ -z "$CARGO_TARGET" || "$CARGO_TARGET" != /workspace/* ]]; then
+    CARGO_TARGET="/workspace/.cargo-target"
+fi
+
 # Build image if not cached
 if ! docker image inspect "$IMAGE_NAME" &>/dev/null; then
     echo "Building devcontainer image: $IMAGE_NAME..."
@@ -45,6 +50,7 @@ echo "Launching container: $CONTAINER_NAME"
 echo "  Worktree: $WORKTREE_DIR"
 echo "  Branch: $BRANCH"
 echo "  Spec: $SPEC_ID"
+echo "  Cargo target: $CARGO_TARGET"
 
 # Locate host copilot binary
 COPILOT_BIN="$(command -v copilot 2>/dev/null || echo "")"

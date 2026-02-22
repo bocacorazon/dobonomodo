@@ -54,11 +54,13 @@ fi
 echo "Creating worktree at $WORKTREE_DIR on branch $BRANCH..."
 git -C "$REPO_ROOT" worktree add "$WORKTREE_DIR" "$BRANCH"
 
-# Set isolated cargo target dir
-echo "CARGO_TARGET_DIR=$WORKTREE_DIR/.cargo-target" > "$WORKTREE_DIR/.env.agent"
-echo "SPECIFY_FEATURE=$BRANCH" >> "$WORKTREE_DIR/.env.agent"
+# Set agent environment.
+# CARGO_TARGET_DIR must be container-local because agent-run executes inside Docker.
+echo "SPECIFY_FEATURE=$BRANCH" > "$WORKTREE_DIR/.env.agent"
+echo "CARGO_TARGET_DIR=/workspace/.cargo-target" >> "$WORKTREE_DIR/.env.agent"
+echo "HOST_CARGO_TARGET_DIR=$WORKTREE_DIR/.cargo-target" >> "$WORKTREE_DIR/.env.agent"
 
 echo ""
 echo "WORKTREE_DIR=$WORKTREE_DIR"
 echo "BRANCH=$BRANCH"
-echo "CARGO_TARGET_DIR=$WORKTREE_DIR/.cargo-target"
+echo "CARGO_TARGET_DIR=/workspace/.cargo-target"
