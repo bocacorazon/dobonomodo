@@ -139,6 +139,97 @@ The workflow pauses for human review in these situations:
 
 After resolving, re-run the orchestrator to continue from where it stopped.
 
+### Resume from Partial or Failed Spec Runs (No Rework Path)
+
+When a spec run fails late (after significant work), resume from the existing branch/worktree instead of recreating it:
+
+```bash
+# 1) Preserve current progress in the spec worktree
+cd /home/marcos/Projects/.worktrees/dobonomodo-S01
+git add -A
+git commit -m "wip: resume checkpoint" || true
+
+# 2) Bring orchestration scripts up to date from develop
+git merge --no-edit develop
+
+# 3) Restart only the spec container/runner
+cd /home/marcos/Projects/dobonomodo
+scripts/dc-stop.sh S01 || true
+scripts/dc-launch.sh S01 /home/marcos/Projects/.worktrees/dobonomodo-S01
+
+# 4) Watch progress
+docker logs -f dobonomodo-S01
+```
+
+Notes:
+- `agent-run.sh` resumes by checking existing artifacts in `specs/<feature-branch>/` and skips completed `speckit.specify/plan/tasks` stages.
+- Avoid deleting the worktree/branch unless you intentionally want a full restart.
+- Use `scripts/orchestrate.sh --spec <id>` only when you want orchestration to recreate/re-evaluate the full spec run flow.
+
+### Troubleshooting and Recovery
+
+#### 1) `NEEDS_HUMAN_REVIEW` after 3 review rounds
+
+Review artifacts in the spec worktree:
+
+```bash
+cd /home/marcos/Projects/.worktrees/dobonomodo-S01
+sed -n '1,200p' .agent-review
+ls -la .agent-review-history/
+tail -120 .agent-log
+```
+
+Apply fixes directly in the worktree, then validate and push:
+
+```bash
+cargo build --workspace
+cargo test --workspace
+cargo clippy --workspace -- -D warnings
+cargo fmt --all --check
+git add -A
+git commit -m "fix(s01): address human review findings"
+git push origin 002-dsl-parser
+```
+
+Resume runner:
+
+```bash
+cd /home/marcos/Projects/dobonomodo
+scripts/dc-stop.sh S01 || true
+scripts/dc-launch.sh S01 /home/marcos/Projects/.worktrees/dobonomodo-S01
+```
+
+#### 2) Agent appears stuck (`.agent-status` stays `RUNNING`)
+
+Check progress:
+
+```bash
+tail -80 /home/marcos/Projects/.worktrees/dobonomodo-S01/.agent-log
+pgrep -fa "agent-run.sh S01|copilot -p"
+```
+
+If no log movement for a long period, stop and resume:
+
+```bash
+kill <copilot-pid> <agent-run-pid>
+cd /home/marcos/Projects/dobonomodo
+scripts/dc-stop.sh S01 || true
+scripts/dc-launch.sh S01 /home/marcos/Projects/.worktrees/dobonomodo-S01
+```
+
+#### 3) Avoiding accidental restart-from-scratch
+
+Before restarting, checkpoint and sync the same worktree branch:
+
+```bash
+cd /home/marcos/Projects/.worktrees/dobonomodo-S01
+git add -A
+git commit -m "wip: resume checkpoint" || true
+git merge --no-edit develop
+```
+
+Do not delete the worktree unless you intentionally want a full rerun.
+
 ## Parallelism Plan
 
 The 22 specs are organized into 7 phases based on their dependency graph:
@@ -164,7 +255,7 @@ Each spec gets its own isolated environment:
 | Layer | Mechanism | Purpose |
 |---|---|---|
 | Git | Worktree at `../.worktrees/dobonomodo-<spec>/` | Branch isolation, no interference |
-| Build | `CARGO_TARGET_DIR=<worktree>/.cargo-target` | No lock contention between builds |
+| Build | `CARGO_TARGET_DIR=/workspace/.cargo-target` (inside each container-mounted worktree) | No lock contention between parallel builds |
 | Runtime | Docker container (`dobonomodo-dev`) | Full process isolation |
 | Cargo cache | Shared Docker volumes (`dobonomodo-cargo-registry`, `dobonomodo-cargo-git`) | Avoid re-downloading crates |
 

@@ -198,8 +198,10 @@
       "bases:Create new base": false
     }
   },
-  "active": "57b760ba66d39c77",
+  "active": "5346e1073dac9bb4",
   "lastOpenFiles": [
+    "docs/reusable-agent-env-prompt-go.md",
+    "docs/reusable-agent-env-prompt.md",
     "docs/architecture/sample-datasets.md",
     "docs/development-workflow.md",
     "docs/Dev Environment.md",
@@ -233,8 +235,6 @@
     "docs/specs/S09-output-operation/prompt.md",
     "docs/specs/S08-append-operation/prompt.md",
     "docs/specs/S07-aggregate-operation/prompt.md",
-    "docs/specs/S06-delete-operation/prompt.md",
-    "docs/specs/S05-runtime-join/prompt.md",
-    "docs/entities/operation.md"
+    "docs/specs/S06-delete-operation/prompt.md"
   ]
 }

@@ -195,11 +195,22 @@ run_code_review() {
 
     rm -f "$diff_file"
 
-    # Check for CRITICAL findings
-    if grep -qi "CRITICAL" "$REVIEW_FILE" 2>/dev/null; then
-        return 1  # has critical findings
+    # Check for CRITICAL findings.
+    # Avoid false positives from lines like "CRITICAL: 0".
+    local critical_count=""
+    critical_count="$(awk 'BEGIN{IGNORECASE=1} /CRITICAL:[[:space:]]*[0-9]+/ { line=$0; sub(/.*CRITICAL:[[:space:]]*/, "", line); sub(/[^0-9].*/, "", line); print line; exit }' "$REVIEW_FILE" 2>/dev/null || true)"
+    if [ -n "$critical_count" ]; then
+        if [ "$critical_count" -gt 0 ]; then
+            return 1
+        fi
+        return 0
     fi
-    return 0  # clean or only minor/important
+
+    # Fallback when summary count is missing: only treat explicit CRITICAL findings as blocking.
+    if grep -Eqi '^###\s*\[?CRITICAL\]?|^\s*-\s*\*\*CRITICAL\*\*|^\s*\[CRITICAL\]' "$REVIEW_FILE" 2>/dev/null; then
+        return 1
+    fi
+    return 0
 }
 
 REVIEW_ROUND=1
