@@ -9,8 +9,12 @@ Auto-generated from all feature plans. Last updated: 2026-02-22
 ## Project Structure
 
 ```text
-src/
-tests/
+crates/
+  core/
+  api-server/
+  engine-worker/
+  cli/
+  test-resolver/
 ```
 
 ## Commands
