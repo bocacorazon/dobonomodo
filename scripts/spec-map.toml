@@ -1,0 +1,141 @@
+# Spec-to-Branch Mapping
+# Used by the orchestrator to determine what to launch and when.
+# Each phase groups specs that can run in parallel.
+# `depends_on` lists phases that must complete before this phase starts.
+
+[phases.0]
+description = "Workspace scaffold"
+specs = ["S00"]
+depends_on = []
+
+[phases.0-1]
+description = "Core types, test harness, CLI foundation, metadata"
+specs = ["S01", "S02", "S16", "S17"]
+depends_on = ["0"]
+
+[phases.0-2]
+description = "Period filter (needs S01)"
+specs = ["S03"]
+depends_on = ["0-1"]
+
+[phases.1]
+description = "All operations + resolver (parallel)"
+specs = ["S04", "S05", "S06", "S07", "S08", "S09", "S11"]
+depends_on = ["0-2"]
+
+[phases.2]
+description = "Pipeline executor + activation validation"
+specs = ["S10", "S13"]
+depends_on = ["1"]
+
+[phases.3]
+description = "Trace engine, project lifecycle, run lifecycle"
+specs = ["S12", "S14", "S15"]
+depends_on = ["2"]
+
+[phases.4]
+description = "Trace writer"
+specs = ["S18"]
+depends_on = ["3"]
+
+[phases.5]
+description = "Engine worker + CLI (parallel)"
+specs = ["S19", "S20"]
+depends_on = ["4"]
+
+[phases.6]
+description = "API server"
+specs = ["S21"]
+depends_on = ["5"]
+
+# --- Spec definitions ---
+# branch: leave empty to auto-create from spec name
+# prompt: path to the spec prompt file
+
+[specs.S00]
+branch = "001-workspace-scaffold"
+prompt = "docs/specs/S00-workspace-scaffold/prompt.md"
+
+[specs.S01]
+branch = ""
+prompt = "docs/specs/S01-dsl-parser/prompt.md"
+
+[specs.S02]
+branch = ""
+prompt = "docs/specs/S02-test-harness/prompt.md"
+
+[specs.S03]
+branch = ""
+prompt = "docs/specs/S03-period-filter/prompt.md"
+
+[specs.S04]
+branch = ""
+prompt = "docs/specs/S04-update-operation/prompt.md"
+
+[specs.S05]
+branch = ""
+prompt = "docs/specs/S05-runtime-join/prompt.md"
+
+[specs.S06]
+branch = ""
+prompt = "docs/specs/S06-delete-operation/prompt.md"
+
+[specs.S07]
+branch = ""
+prompt = "docs/specs/S07-aggregate-operation/prompt.md"
+
+[specs.S08]
+branch = ""
+prompt = "docs/specs/S08-append-operation/prompt.md"
+
+[specs.S09]
+branch = ""
+prompt = "docs/specs/S09-output-operation/prompt.md"
+
+[specs.S10]
+branch = ""
+prompt = "docs/specs/S10-pipeline-executor/prompt.md"
+
+[specs.S11]
+branch = ""
+prompt = "docs/specs/S11-resolver-engine/prompt.md"
+
+[specs.S12]
+branch = ""
+prompt = "docs/specs/S12-trace-engine/prompt.md"
+
+[specs.S13]
+branch = ""
+prompt = "docs/specs/S13-activation-validation/prompt.md"
+
+[specs.S14]
+branch = ""
+prompt = "docs/specs/S14-project-lifecycle/prompt.md"
+
+[specs.S15]
+branch = ""
+prompt = "docs/specs/S15-run-lifecycle/prompt.md"
+
+[specs.S16]
+branch = ""
+prompt = "docs/specs/S16-datasource-adapters/prompt.md"
+
+[specs.S17]
+branch = ""
+prompt = "docs/specs/S17-metadata-store/prompt.md"
+
+[specs.S18]
+branch = ""
+prompt = "docs/specs/S18-trace-writer/prompt.md"
+
+[specs.S19]
+branch = ""
+prompt = "docs/specs/S19-engine-worker/prompt.md"
+
+[specs.S20]
+branch = ""
+prompt = "docs/specs/S20-cli/prompt.md"
+
+[specs.S21]
+branch = ""
+prompt = "docs/specs/S21-api-server/prompt.md"

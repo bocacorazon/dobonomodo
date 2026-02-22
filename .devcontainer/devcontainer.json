@@ -1,0 +1,24 @@
+{
+  "name": "DobONoMoDo Agent",
+  "build": {
+    "dockerfile": "Dockerfile",
+    "context": ".."
+  },
+  "containerEnv": {
+    "CARGO_TARGET_DIR": "/workspace/.cargo-target"
+  },
+  "mounts": [
+    "source=dobonomodo-cargo-registry,target=/home/agent/.cargo/registry,type=volume",
+    "source=dobonomodo-cargo-git,target=/home/agent/.cargo/git,type=volume"
+  ],
+  "postCreateCommand": "bash .devcontainer/post-create.sh",
+  "remoteUser": "agent",
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "rust-lang.rust-analyzer",
+        "GitHub.copilot"
+      ]
+    }
+  }
+}

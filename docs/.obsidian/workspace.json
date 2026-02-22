@@ -1,56 +1,37 @@
 {
   "main": {
-    "id": "2866c31b66376571",
+    "id": "a4c8389b0f99cccc",
     "type": "split",
     "children": [
       {
-        "id": "f906a5289186d7a3",
+        "id": "e72319070b1b2fb7",
         "type": "tabs",
         "children": [
           {
-            "id": "17e60e0aed9e1101",
+            "id": "cd8b24a22bca0b6e",
             "type": "leaf",
             "state": {
-              "type": "markdown",
-              "state": {
-                "file": "DobONoMoDo.md",
-                "mode": "source",
-                "source": false
-              },
+              "type": "empty",
+              "state": {},
               "icon": "lucide-file",
-              "title": "DobONoMoDo"
-            }
-          },
-          {
-            "id": "57b760ba66d39c77",
-            "type": "leaf",
-            "state": {
-              "type": "markdown",
-              "state": {
-                "file": "docs/development-workflow.md",
-                "mode": "source",
-                "source": true
-              },
-              "icon": "lucide-file",
-              "title": "development-workflow"
+              "title": "New tab"
             }
           }
-        ],
-        "currentTab": 1
+        ]
       }
     ],
     "direction": "vertical"
   },
   "left": {
-    "id": "b4819958f87019b6",
+    "id": "261b9eeb09f90d32",
     "type": "split",
     "children": [
       {
-        "id": "19213ab657388fa1",
+        "id": "95bbf8e9d1e25919",
         "type": "tabs",
         "children": [
           {
-            "id": "5346e1073dac9bb4",
+            "id": "c0edfce224a57390",
             "type": "leaf",
             "state": {
               "type": "file-explorer",
@@ -63,7 +44,7 @@
             }
           },
           {
-            "id": "154753b24657fbd2",
+            "id": "2a34098c34cf155a",
             "type": "leaf",
             "state": {
               "type": "search",
@@ -80,7 +61,7 @@
             }
           },
           {
-            "id": "cc44936b7b5cb22c",
+            "id": "9cb06f8f3ba61edf",
             "type": "leaf",
             "state": {
               "type": "bookmarks",
@@ -93,23 +74,22 @@
       }
     ],
     "direction": "horizontal",
-    "width": 233
+    "width": 300
   },
   "right": {
-    "id": "93905123235fb080",
+    "id": "1eaa4e2721bc5567",
     "type": "split",
     "children": [
       {
-        "id": "6a1bb2ce1739c1d7",
+        "id": "d6454b27fb32e058",
         "type": "tabs",
         "children": [
           {
-            "id": "7cd6fff9bbe6c0b2",
+            "id": "8d23ac75ffe7cc17",
             "type": "leaf",
             "state": {
               "type": "backlink",
               "state": {
-                "file": "docs/specs/S00-workspace-scaffold/prompt.md",
                 "collapseAll": false,
                 "extraContext": false,
                 "sortOrder": "alphabetical",
@@ -119,25 +99,24 @@
                 "unlinkedCollapsed": true
               },
               "icon": "links-coming-in",
-              "title": "Backlinks for prompt"
+              "title": "Backlinks"
             }
           },
           {
-            "id": "60d688c5eb554213",
+            "id": "f42a2bd70697a70f",
             "type": "leaf",
             "state": {
               "type": "outgoing-link",
               "state": {
-                "file": "docs/specs/S00-workspace-scaffold/prompt.md",
                 "linksCollapsed": false,
                 "unlinkedCollapsed": true
               },
               "icon": "links-going-out",
-              "title": "Outgoing links from prompt"
+              "title": "Outgoing links"
             }
           },
           {
-            "id": "614ddd114e8acfd8",
+            "id": "908558ff15673d3d",
             "type": "leaf",
             "state": {
               "type": "tag",
@@ -152,7 +131,7 @@
             }
           },
           {
-            "id": "5e6bdb51100f0f44",
+            "id": "b148c9d0cb30556c",
             "type": "leaf",
             "state": {
               "type": "all-properties",
@@ -166,18 +145,17 @@
             }
           },
           {
-            "id": "c1ff7f794edd62c3",
+            "id": "4038389b30cbd368",
             "type": "leaf",
             "state": {
               "type": "outline",
               "state": {
-                "file": "docs/specs/S00-workspace-scaffold/prompt.md",
                 "followCursor": false,
                 "showSearch": false,
                 "searchQuery": ""
               },
               "icon": "lucide-list",
-              "title": "Outline of prompt"
+              "title": "Outline"
             }
           }
         ]
@@ -198,43 +176,6 @@
       "bases:Create new base": false
     }
   },
-  "active": "57b760ba66d39c77",
-  "lastOpenFiles": [
-    "docs/architecture/sample-datasets.md",
-    "docs/development-workflow.md",
-    "docs/Dev Environment.md",
-    "docs/architecture/implementation-plan.md",
-    "scripts/phase-gate-review.sh",
-    "scripts/orchestrate.sh",
-    "scripts/review-prompt-template.md",
-    "scripts/dc-stop.sh",
-    "scripts/dc-launch.sh",
-    "scripts/agent-run.sh",
-    "scripts/worktree-list.sh",
-    "scripts/worktree-destroy.sh",
-    "scripts/worktree-create.sh",
-    "scripts/spec-map.toml",
-    "scripts",
-    "README.md",
-    "docs/specs/S00-workspace-scaffold/prompt.md",
-    "docs/discussion/2026-02-22-session.md",
-    "docs/specs/S21-api-server/prompt.md",
-    "docs/specs/S20-cli/prompt.md",
-    "docs/specs/S19-engine-worker/prompt.md",
-    "docs/specs/S18-trace-writer/prompt.md",
-    "docs/specs/S17-metadata-store/prompt.md",
-    "docs/specs/S16-datasource-adapters/prompt.md",
-    "docs/specs/S15-run-lifecycle/prompt.md",
-    "docs/specs/S14-project-lifecycle/prompt.md",
-    "docs/specs/S13-activation-validation/prompt.md",
-    "docs/specs/S12-trace-engine/prompt.md",
-    "docs/specs/S11-resolver-engine/prompt.md",
-    "docs/specs/S10-pipeline-executor/prompt.md",
-    "docs/specs/S09-output-operation/prompt.md",
-    "docs/specs/S08-append-operation/prompt.md",
-    "docs/specs/S07-aggregate-operation/prompt.md",
-    "docs/specs/S06-delete-operation/prompt.md",
-    "docs/specs/S05-runtime-join/prompt.md",
-    "docs/entities/operation.md"
-  ]
+  "active": "cd8b24a22bca0b6e",
+  "lastOpenFiles": []
 }

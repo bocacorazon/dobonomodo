@@ -21,3 +21,15 @@ Thumbs.db
 
 # Generated/spec session artifacts
 .specstory/
+
+# Agent runtime artifacts (generated during orchestrated runs)
+.agent-status
+.agent-log
+.agent-review
+.agent-review-history/
+.agent-escalation
+.agent-diff
+.env.agent
+.cargo-target/
+.phase-review-*.md
+.phase-review-diff

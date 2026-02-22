@@ -98,6 +98,8 @@ See `docs/architecture/sample-datasets.md` for full schema, sample rows, and tes
 
 ## Parallelism Map
 
+^d36dec
+
 ```
 Phase 0:  S00
            │
