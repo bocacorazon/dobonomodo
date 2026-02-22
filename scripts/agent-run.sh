@@ -40,16 +40,43 @@ if [[ ! "$BRANCH" =~ ^[0-9]{3}- ]]; then
     exit 1
 fi
 
-# Find the spec's prompt file
-SPEC_DIR=$(find "$REPO_ROOT/docs/specs" -maxdepth 1 -name "${SPEC_ID}-*" -type d | head -1)
-if [ -z "$SPEC_DIR" ]; then
-    # Try specs/ directory (spec-kit convention)
-    SPEC_DIR=$(find "$REPO_ROOT/specs" -maxdepth 1 -name "${BRANCH}*" -type d 2>/dev/null | head -1)
+DOC_SPEC_DIR=""
+if [ -d "$REPO_ROOT/docs/specs" ]; then
+    DOC_SPEC_DIR="$(find "$REPO_ROOT/docs/specs" -maxdepth 1 -name "${SPEC_ID}-*" -type d 2>/dev/null | head -1 || true)"
 fi
 
-if [ -z "$SPEC_DIR" ]; then
-    log "WARNING: No spec directory found for $SPEC_ID, will rely on spec-kit to create it"
-fi
+find_feature_dir() {
+    local dir=""
+    local prefix="${BRANCH%%-*}"
+
+    if [ -d "$REPO_ROOT/specs" ]; then
+        # Prefer exact branch match first.
+        dir="$(find "$REPO_ROOT/specs" -maxdepth 1 -name "${BRANCH}" -type d 2>/dev/null | head -1 || true)"
+        if [ -z "$dir" ]; then
+            # Fallback to numeric prefix match (supports 004-fix-* style branches).
+            dir="$(find "$REPO_ROOT/specs" -maxdepth 1 -name "${prefix}-*" -type d 2>/dev/null | head -1 || true)"
+        fi
+    fi
+
+    echo "$dir"
+}
+
+refresh_artifact_paths() {
+    ARTIFACT_DIR="$(find_feature_dir)"
+    if [ -z "$ARTIFACT_DIR" ]; then
+        ARTIFACT_DIR="$DOC_SPEC_DIR"
+    fi
+    if [ -z "$ARTIFACT_DIR" ]; then
+        ARTIFACT_DIR="$REPO_ROOT/specs/$BRANCH"
+    fi
+
+    FEATURE_SPEC="$ARTIFACT_DIR/spec.md"
+    IMPL_PLAN="$ARTIFACT_DIR/plan.md"
+    TASKS="$ARTIFACT_DIR/tasks.md"
+}
+
+refresh_artifact_paths
+log "Artifact directory: $ARTIFACT_DIR"
 
 # --- Step 2: Run spec-kit pipeline ---
 log "Step 2: Running spec-kit pipeline..."
@@ -79,20 +106,17 @@ run_speckit_stage() {
     fi
 }
 
-# Determine spec-kit artifact paths
-FEATURE_SPEC="${SPEC_DIR}/spec.md"
-IMPL_PLAN="${SPEC_DIR}/plan.md"
-TASKS="${SPEC_DIR}/tasks.md"
-
 if ! run_speckit_stage "speckit.specify" "$FEATURE_SPEC"; then
     set_status "FAILED"
     exit 1
 fi
+refresh_artifact_paths
 
 if ! run_speckit_stage "speckit.plan" "$IMPL_PLAN"; then
     set_status "FAILED"
     exit 1
 fi
+refresh_artifact_paths
 
 if ! run_speckit_stage "speckit.tasks" "$TASKS"; then
     set_status "FAILED"
