@@ -6,6 +6,9 @@ edition.workspace = true
 [dependencies]
 anyhow.workspace = true
 chrono.workspace = true
+lazy_static.workspace = true
+pest.workspace = true
+pest_derive.workspace = true
 polars.workspace = true
 serde.workspace = true
 serde_json.workspace = true
