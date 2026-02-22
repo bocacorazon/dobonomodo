@@ -67,7 +67,7 @@ COUNT(transactions.journal_id)
 {{EMEA_ONLY}}
 
 # Date function
-posting_date >= TODAY() - 30
+transactions.posting_date >= TODAY() - 30
 
 # NULL handling
 IF(IS_NULL(transactions.amount_reporting), transactions.amount_local, transactions.amount_reporting)

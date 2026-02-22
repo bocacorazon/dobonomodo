@@ -12,11 +12,12 @@ pub enum ParseError {
         message: String,
     },
 
-    #[error("Unexpected token '{token}' at line {line}, column {column}")]
+    #[error("Expected {expected}, found {found} at line {line}, column {col}")]
     UnexpectedToken {
-        token: String,
+        expected: String,
+        found: String,
         line: usize,
-        column: usize,
+        col: usize,
     },
 
     #[error("Unclosed string literal at line {line}, column {column}")]

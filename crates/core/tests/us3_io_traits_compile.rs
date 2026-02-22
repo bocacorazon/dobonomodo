@@ -7,7 +7,10 @@ use dobo_core::model::{
     ResolvedLocation, Resolver, ResolverStatus, RunStatus, TableRef, Visibility,
 };
 use dobo_core::trace::types::TraceEvent;
-use dobo_core::{DataLoader, MetadataStore, OutputWriter, TraceWriter};
+use dobo_core::{
+    DataLoader, DataLoaderError, MetadataStore, MetadataStoreError, OutputWriter,
+    OutputWriterError, TraceWriteError, TraceWriter,
+};
 use polars::df;
 use polars::prelude::{DataFrame, IntoLazy};
 use uuid::Uuid;
@@ -35,16 +38,20 @@ impl DataLoader for InMemoryLoader {
         &self,
         location: &ResolvedLocation,
         _schema: &TableRef,
-    ) -> anyhow::Result<polars::prelude::LazyFrame> {
+    ) -> Result<polars::prelude::LazyFrame, DataLoaderError> {
         let key = location
             .path
             .as_deref()
             .or(location.table.as_deref())
-            .ok_or_else(|| anyhow::anyhow!("location must provide path or table"))?;
-        let frame = self
-            .frames_by_location
-            .get(key)
-            .ok_or_else(|| anyhow::anyhow!("no frame for location '{key}'"))?;
+            .ok_or_else(|| DataLoaderError::LoadFailed {
+                message: "location must provide path or table".to_string(),
+            })?;
+        let frame =
+            self.frames_by_location
+                .get(key)
+                .ok_or_else(|| DataLoaderError::LoadFailed {
+                    message: format!("no frame for location '{key}'"),
+                })?;
         Ok(frame.clone().lazy())
     }
 }
@@ -55,7 +62,11 @@ struct InMemoryOutputWriter {
 }
 
 impl OutputWriter for InMemoryOutputWriter {
-    fn write(&self, frame: &DataFrame, destination: &OutputDestination) -> anyhow::Result<()> {
+    fn write(
+        &self,
+        frame: &DataFrame,
+        destination: &OutputDestination,
+    ) -> Result<(), OutputWriterError> {
         self.writes
             .lock()
             .expect("lock should succeed")
@@ -73,34 +84,34 @@ struct InMemoryMetadataStore {
 }
 
 impl MetadataStore for InMemoryMetadataStore {
-    fn get_dataset(&self, id: &Uuid, _version: Option<i32>) -> anyhow::Result<Dataset> {
+    fn get_dataset(&self, id: &Uuid, _version: Option<i32>) -> Result<Dataset, MetadataStoreError> {
         self.datasets
             .lock()
             .expect("lock should succeed")
             .get(id)
             .cloned()
-            .ok_or_else(|| anyhow::anyhow!("dataset '{id}' not found"))
+            .ok_or(MetadataStoreError::DatasetNotFound { id: *id })
     }
 
-    fn get_project(&self, id: &Uuid) -> anyhow::Result<Project> {
+    fn get_project(&self, id: &Uuid) -> Result<Project, MetadataStoreError> {
         self.projects
             .lock()
             .expect("lock should succeed")
             .get(id)
             .cloned()
-            .ok_or_else(|| anyhow::anyhow!("project '{id}' not found"))
+            .ok_or(MetadataStoreError::ProjectNotFound { id: *id })
     }
 
-    fn get_resolver(&self, id: &str) -> anyhow::Result<Resolver> {
+    fn get_resolver(&self, id: &str) -> Result<Resolver, MetadataStoreError> {
         self.resolvers
             .lock()
             .expect("lock should succeed")
             .get(id)
             .cloned()
-            .ok_or_else(|| anyhow::anyhow!("resolver '{id}' not found"))
+            .ok_or_else(|| MetadataStoreError::ResolverNotFound { id: id.to_string() })
     }
 
-    fn update_run_status(&self, id: &Uuid, status: RunStatus) -> anyhow::Result<()> {
+    fn update_run_status(&self, id: &Uuid, status: RunStatus) -> Result<(), MetadataStoreError> {
         self.run_status_updates
             .lock()
             .expect("lock should succeed")
@@ -115,7 +126,7 @@ struct InMemoryTraceWriter {
 }
 
 impl TraceWriter for InMemoryTraceWriter {
-    fn write_events(&self, run_id: &Uuid, events: &[TraceEvent]) -> anyhow::Result<()> {
+    fn write_events(&self, run_id: &Uuid, events: &[TraceEvent]) -> Result<(), TraceWriteError> {
         self.events_by_run
             .lock()
             .expect("lock should succeed")

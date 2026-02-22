@@ -46,12 +46,21 @@ pub fn compile_expression(
     ast: &ExprAST,
     context: &CompilationContext,
 ) -> Result<CompiledExpression, CompilationError> {
+    compile_expression_with_source(&ast.to_string(), ast, context)
+}
+
+/// Compile an AST expression with an explicit authored source string.
+pub fn compile_expression_with_source(
+    source: &str,
+    ast: &ExprAST,
+    context: &CompilationContext,
+) -> Result<CompiledExpression, CompilationError> {
     validate_expression(ast, context)?;
     let return_type = infer_type(ast, context)?;
     let expr = compile_ast(ast, context)?;
 
     Ok(CompiledExpression {
-        source: format!("{ast:?}"),
+        source: source.to_string(),
         expr,
         return_type,
     })
@@ -64,15 +73,7 @@ pub fn compile_with_interpolation(
 ) -> Result<CompiledExpression, CompilationError> {
     let expanded = interpolate_selectors(source, context)?;
     let ast = parse_expression(&expanded)?;
-    validate_expression(&ast, context)?;
-    let return_type = infer_type(&ast, context)?;
-    let expr = compile_ast(&ast, context)?;
-
-    Ok(CompiledExpression {
-        source: expanded,
-        expr,
-        return_type,
-    })
+    compile_expression_with_source(source, &ast, context)
 }
 
 fn compile_ast(ast: &ExprAST, context: &CompilationContext) -> Result<Expr, CompilationError> {

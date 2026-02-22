@@ -467,6 +467,18 @@ fn test_type_check_divide_requires_number() {
 }
 
 #[test]
+fn test_type_check_divide_by_zero_reports_specific_error() {
+    let ctx = CompilationContext::new();
+    let expr = parse_expression("10 / 0").expect("Failed to parse");
+    let result = validate_expression(&expr, &ctx);
+
+    assert!(matches!(
+        result,
+        Err(ValidationError::DivisionByZero { .. })
+    ));
+}
+
+#[test]
 fn test_type_check_function_argument_type() {
     let ctx = CompilationContext::new();
 

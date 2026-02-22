@@ -363,15 +363,26 @@ fn test_nested_parentheses() {
 // T019: Unit test for parse error cases
 #[test]
 fn test_parse_error_unclosed_string() {
-    let result = parse_expression(r#""unclosed string"#);
-    assert!(result.is_err());
-    // Should contain position information
+    let err = parse_expression(r#""unclosed string"#).expect_err("unclosed string should fail");
+    match err {
+        ParseError::UnclosedString { line, column } => {
+            assert_eq!(line, 1);
+            assert!(column >= 1);
+        }
+        other => panic!("Expected UnclosedString, got {other:?}"),
+    }
 }
 
 #[test]
 fn test_parse_error_unclosed_paren() {
-    let result = parse_expression("(1 + 2");
-    assert!(result.is_err());
+    let err = parse_expression("(1 + 2").expect_err("unclosed parenthesis should fail");
+    match err {
+        ParseError::UnclosedParenthesis { line, column } => {
+            assert_eq!(line, 1);
+            assert!(column >= 1);
+        }
+        other => panic!("Expected UnclosedParenthesis, got {other:?}"),
+    }
 }
 
 #[test]
@@ -379,14 +390,15 @@ fn test_parse_error_invalid_token() {
     let err = parse_expression("1 + @").expect_err("invalid token should fail");
     match err {
         ParseError::UnexpectedToken {
-            token,
+            expected,
+            found,
             line,
-            column,
+            col,
         } => {
             assert_eq!(line, 1);
-            assert!(column >= 5);
-            assert!(token.contains('@'));
-            assert!(token.contains("expected:"));
+            assert!(col >= 5);
+            assert_eq!(found, "@");
+            assert!(!expected.is_empty());
         }
         other => panic!("Expected UnexpectedToken, got {other:?}"),
     }
@@ -397,14 +409,15 @@ fn test_parse_error_incomplete_expression() {
     let err = parse_expression("1 +").expect_err("incomplete expression should fail");
     match err {
         ParseError::UnexpectedToken {
-            token,
+            expected,
+            found,
             line,
-            column,
+            col,
         } => {
             assert_eq!(line, 1);
-            assert!(column >= 3);
-            assert!(token.contains("<eof>"));
-            assert!(token.contains("expected:"));
+            assert!(col >= 3);
+            assert_eq!(found, "<eof>");
+            assert!(!expected.is_empty());
         }
         other => panic!("Expected UnexpectedToken, got {other:?}"),
     }

@@ -99,10 +99,7 @@ fn type_check(ast: &ExprAST, context: &CompilationContext) -> Result<(), Validat
             let right_type = infer_type(right, context)?;
 
             match op {
-                BinaryOperator::Add
-                | BinaryOperator::Subtract
-                | BinaryOperator::Multiply
-                | BinaryOperator::Divide => {
+                BinaryOperator::Add | BinaryOperator::Subtract | BinaryOperator::Multiply => {
                     let is_date_arithmetic =
                         matches!(op, BinaryOperator::Add | BinaryOperator::Subtract)
                             && left_type == ExprType::Date
@@ -121,6 +118,28 @@ fn type_check(ast: &ExprAST, context: &CompilationContext) -> Result<(), Validat
                             expected: "Number".to_string(),
                             actual: right_type.name().to_string(),
                             context: format!("right operand of {}", op),
+                        });
+                    }
+                }
+                BinaryOperator::Divide => {
+                    if !left_type.is_numeric() && left_type != ExprType::Any {
+                        return Err(ValidationError::TypeMismatch {
+                            expected: "Number".to_string(),
+                            actual: left_type.name().to_string(),
+                            context: format!("left operand of {}", op),
+                        });
+                    }
+                    if !right_type.is_numeric() && right_type != ExprType::Any {
+                        return Err(ValidationError::TypeMismatch {
+                            expected: "Number".to_string(),
+                            actual: right_type.name().to_string(),
+                            context: format!("right operand of {}", op),
+                        });
+                    }
+                    if matches!(right.as_ref(), ExprAST::Literal(LiteralValue::Number(n)) if *n == 0.0)
+                    {
+                        return Err(ValidationError::DivisionByZero {
+                            context: format!("{ast:?}"),
                         });
                     }
                 }

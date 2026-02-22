@@ -51,7 +51,10 @@ pub mod validation;
 
 // Re-export main types and functions
 pub use ast::*;
-pub use compiler::{compile_expression, compile_with_interpolation, CompiledExpression};
+pub use compiler::{
+    compile_expression, compile_expression_with_source, compile_with_interpolation,
+    CompiledExpression,
+};
 pub use context::*;
 pub use error::*;
 pub use interpolation::interpolate_selectors;

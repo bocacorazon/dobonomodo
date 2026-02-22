@@ -188,9 +188,22 @@ fn test_contract_polars_compatibility() {
 fn test_compile_with_interpolation_end_to_end() {
     let mut ctx = build_context(false);
     ctx.add_selector("HIGH_AMOUNT", "transactions.amount > 10");
-    let compiled = compile_with_interpolation("{HIGH_AMOUNT} AND transactions.flag = TRUE", &ctx)
-        .expect("full compile should succeed");
+    let source = "{HIGH_AMOUNT} AND transactions.flag = TRUE";
+    let compiled = compile_with_interpolation(source, &ctx).expect("full compile should succeed");
     assert_eq!(compiled.return_type(), ExprType::Boolean);
+    assert_eq!(compiled.source, source);
+}
+
+#[test]
+fn test_compile_expression_with_source_preserves_authored_text() {
+    let ctx = build_context(false);
+    let source = "transactions.amount+1";
+    let ast = parse_expression(source).expect("parse should succeed");
+
+    let compiled =
+        compile_expression_with_source(source, &ast, &ctx).expect("compile should succeed");
+
+    assert_eq!(compiled.source, source);
 }
 
 #[test]

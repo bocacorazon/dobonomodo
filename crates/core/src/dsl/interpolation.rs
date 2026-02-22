@@ -2,26 +2,50 @@
 
 use crate::dsl::context::CompilationContext;
 use crate::dsl::error::ValidationError;
+use std::collections::HashMap;
 
 const MAX_INTERPOLATION_DEPTH: usize = 10;
 
 /// Expand selector references in an expression source.
 ///
 /// Supports both `{NAME}` and `{{NAME}}` forms.
-pub fn interpolate_selectors(
-    source: &str,
-    context: &CompilationContext,
-) -> Result<String, ValidationError> {
+///
+/// Accepts either a selectors map (`&HashMap<String, String>`) or a
+/// [`CompilationContext`] reference.
+pub fn interpolate_selectors<S>(source: &str, selectors: &S) -> Result<String, ValidationError>
+where
+    S: SelectorLookup + ?Sized,
+{
     let mut stack = Vec::new();
-    interpolate_recursive(source, context, &mut stack, 0)
+    interpolate_recursive(source, selectors, &mut stack, 0)
 }
 
-fn interpolate_recursive(
+/// Selector source abstraction used by interpolation.
+pub trait SelectorLookup {
+    fn get_selector_expr(&self, name: &str) -> Option<&str>;
+}
+
+impl SelectorLookup for HashMap<String, String> {
+    fn get_selector_expr(&self, name: &str) -> Option<&str> {
+        self.get(name).map(|value| value.as_str())
+    }
+}
+
+impl SelectorLookup for CompilationContext {
+    fn get_selector_expr(&self, name: &str) -> Option<&str> {
+        self.get_selector(name)
+    }
+}
+
+fn interpolate_recursive<S>(
     source: &str,
-    context: &CompilationContext,
+    selectors: &S,
     stack: &mut Vec<String>,
     depth: usize,
-) -> Result<String, ValidationError> {
+) -> Result<String, ValidationError>
+where
+    S: SelectorLookup + ?Sized,
+{
     if depth > MAX_INTERPOLATION_DEPTH {
         return Err(ValidationError::MaxInterpolationDepth {
             max_depth: MAX_INTERPOLATION_DEPTH,
@@ -61,14 +85,14 @@ fn interpolate_recursive(
                     return Err(ValidationError::CircularSelectorRef { cycle });
                 }
 
-                let selector_expr = context.get_selector(raw_name).ok_or_else(|| {
+                let selector_expr = selectors.get_selector_expr(raw_name).ok_or_else(|| {
                     ValidationError::UnresolvedSelectorRef {
                         selector: raw_name.to_string(),
                     }
                 })?;
 
                 stack.push(raw_name.to_string());
-                let expanded = interpolate_recursive(selector_expr, context, stack, depth + 1)?;
+                let expanded = interpolate_recursive(selector_expr, selectors, stack, depth + 1)?;
                 stack.pop();
 
                 output.push_str(&expanded);
@@ -86,7 +110,7 @@ fn interpolate_recursive(
 
     if changed {
         // A selector can expand into additional selectors.
-        interpolate_recursive(&output, context, stack, depth + 1)
+        interpolate_recursive(&output, selectors, stack, depth + 1)
     } else {
         Ok(output)
     }

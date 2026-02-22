@@ -169,6 +169,52 @@ impl std::fmt::Display for UnaryOperator {
     }
 }
 
+impl std::fmt::Display for LiteralValue {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            LiteralValue::Number(value) => {
+                if value.fract().abs() < f64::EPSILON {
+                    write!(f, "{value:.0}")
+                } else {
+                    write!(f, "{value}")
+                }
+            }
+            LiteralValue::String(value) => write!(f, "\"{}\"", value.replace('"', "\\\"")),
+            LiteralValue::Boolean(value) => {
+                if *value {
+                    write!(f, "TRUE")
+                } else {
+                    write!(f, "FALSE")
+                }
+            }
+            LiteralValue::Date(value) => write!(f, "DATE(\"{value}\")"),
+            LiteralValue::Null => write!(f, "NULL"),
+        }
+    }
+}
+
+impl std::fmt::Display for ExprAST {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ExprAST::Literal(value) => write!(f, "{value}"),
+            ExprAST::ColumnRef { table, column } => write!(f, "{table}.{column}"),
+            ExprAST::BinaryOp { op, left, right } => write!(f, "({left} {op} {right})"),
+            ExprAST::UnaryOp { op, operand } => match op {
+                UnaryOperator::Not => write!(f, "NOT ({operand})"),
+                UnaryOperator::Negate => write!(f, "-({operand})"),
+            },
+            ExprAST::FunctionCall { name, args } => {
+                let rendered = args
+                    .iter()
+                    .map(|arg| arg.to_string())
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                write!(f, "{name}({rendered})")
+            }
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -224,5 +270,15 @@ mod tests {
         assert_eq!(BinaryOperator::Add.to_string(), "+");
         assert_eq!(BinaryOperator::Equal.to_string(), "=");
         assert_eq!(UnaryOperator::Not.to_string(), "NOT");
+    }
+
+    #[test]
+    fn test_expr_display_is_valid_dsl() {
+        let expr = ExprAST::binary_op(
+            BinaryOperator::Add,
+            ExprAST::column_ref("orders", "amount"),
+            ExprAST::number(2.0),
+        );
+        assert_eq!(expr.to_string(), "(orders.amount + 2)");
     }
 }

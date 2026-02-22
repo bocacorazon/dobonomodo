@@ -94,18 +94,23 @@ fn map_pest_parse_error(input: &str, error: PestError<Rule>) -> ParseError {
 
     let found = token_at_location(input, &error.location);
 
+    let (has_unclosed_string, has_unclosed_parenthesis) = detect_unclosed_delimiters(input);
+    if has_unclosed_string {
+        return ParseError::UnclosedString { line, column };
+    }
+    if found == "<eof>" && has_unclosed_parenthesis {
+        return ParseError::UnclosedParenthesis { line, column };
+    }
+
     match error.variant {
         ErrorVariant::ParsingError { positives, .. } => {
-            let expected = format_expected_rules(&positives);
-            let token = if let Some(expected) = expected {
-                format!("{} (expected: {})", found, expected)
-            } else {
-                found
-            };
+            let expected =
+                format_expected_rules(&positives).unwrap_or_else(|| "valid expression".to_string());
             ParseError::UnexpectedToken {
-                token,
+                expected,
+                found,
                 line,
-                column,
+                col: column,
             }
         }
         ErrorVariant::CustomError { message } => ParseError::SyntaxError {
@@ -114,6 +119,30 @@ fn map_pest_parse_error(input: &str, error: PestError<Rule>) -> ParseError {
             message,
         },
     }
+}
+
+fn detect_unclosed_delimiters(input: &str) -> (bool, bool) {
+    let mut in_string = false;
+    let mut open_parentheses = 0usize;
+
+    for ch in input.chars() {
+        if ch == '"' {
+            in_string = !in_string;
+            continue;
+        }
+
+        if in_string {
+            continue;
+        }
+
+        if ch == '(' {
+            open_parentheses += 1;
+        } else if ch == ')' {
+            open_parentheses = open_parentheses.saturating_sub(1);
+        }
+    }
+
+    (in_string, open_parentheses > 0)
 }
 
 fn token_at_location(input: &str, location: &InputLocation) -> String {
