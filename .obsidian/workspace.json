@@ -27,12 +27,12 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "docs/entities/period.md",
+                "file": "docs/entities/operation.md",
                 "mode": "preview",
                 "source": true
               },
               "icon": "lucide-file",
-              "title": "period"
+              "title": "operation"
             }
           }
         ],
@@ -109,7 +109,7 @@
             "state": {
               "type": "backlink",
               "state": {
-                "file": "docs/entities/period.md",
+                "file": "docs/entities/operation.md",
                 "collapseAll": false,
                 "extraContext": false,
                 "sortOrder": "alphabetical",
@@ -119,7 +119,7 @@
                 "unlinkedCollapsed": true
               },
               "icon": "links-coming-in",
-              "title": "Backlinks for period"
+              "title": "Backlinks for operation"
             }
           },
           {
@@ -128,12 +128,12 @@
             "state": {
               "type": "outgoing-link",
               "state": {
-                "file": "docs/entities/period.md",
+                "file": "docs/entities/operation.md",
                 "linksCollapsed": false,
                 "unlinkedCollapsed": true
               },
               "icon": "links-going-out",
-              "title": "Outgoing links from period"
+              "title": "Outgoing links from operation"
             }
           },
           {
@@ -171,13 +171,13 @@
             "state": {
               "type": "outline",
               "state": {
-                "file": "docs/entities/period.md",
+                "file": "docs/entities/operation.md",
                 "followCursor": false,
                 "showSearch": false,
                 "searchQuery": ""
               },
               "icon": "lucide-list",
-              "title": "Outline of period"
+              "title": "Outline of operation"
             }
           }
         ]
@@ -198,8 +198,13 @@
       "bases:Create new base": false
     }
   },
-  "active": "5346e1073dac9bb4",
+  "active": "57b760ba66d39c77",
   "lastOpenFiles": [
+    "docs/capabilities/trace-run-execution.md",
+    "docs/capabilities/resolve-dataset.md",
+    "docs/capabilities/execute-project-calculation.md",
+    "docs/entities/period.md",
+    "docs/entities/operation.md",
     "docs/entities/expression.md",
     "docs/entities/bitemporal-dataset.md",
     "docs/entities/dataset.md",
@@ -207,7 +212,6 @@
     "docs/entities/datasource.md",
     "docs/entities/run.md",
     "docs/entities/calendar.md",
-    "docs/entities/period.md",
     "docs/entities/project.md",
     "DobONoMoDo.md",
     "docs/capabilities",
