@@ -27,7 +27,6 @@ primary = {
     literal
     | function_call
     | column_ref
-    | bare_identifier
     | "(" ~ expr ~ ")"
 }
 
@@ -37,7 +36,7 @@ unary_op = {
     | negate_op
 }
 
-not_op = { "NOT" }
+not_op = { "NOT" ~ !("(") }
 negate_op = { "-" }
 
 // Arithmetic operators
@@ -63,6 +62,7 @@ literal = {
     null_literal
     | boolean_literal
     | number_literal
+    | date_literal
     | string_literal
 }
 
@@ -70,10 +70,10 @@ null_literal = { ^"NULL" }
 boolean_literal = { ^"TRUE" | ^"FALSE" }
 number_literal = @{ ASCII_DIGIT+ ~ ("." ~ ASCII_DIGIT+)? }
 string_literal = @{ "\"" ~ (!("\"") ~ ANY)* ~ "\"" }
+date_literal = { ^"DATE" ~ "(" ~ string_literal ~ ")" }
 
-// Column reference: table.column or bare column
+// Column reference: table.column
 column_ref = @{ identifier ~ "." ~ identifier }
-bare_identifier = @{ identifier }
 
 // Function call: FUNC(arg1, arg2, ...)
 function_call = { identifier ~ "(" ~ arg_list? ~ ")" }

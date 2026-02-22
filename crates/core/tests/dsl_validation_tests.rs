@@ -38,11 +38,27 @@ fn test_column_resolution_valid_multiple_tables() {
     ctx.add_column("transactions.amount", ColumnType::Float);
 
     // Test each column
-    for col_ref in &["users.id", "users.name", "transactions.user_id", "transactions.amount"] {
+    for col_ref in &[
+        "users.id",
+        "users.name",
+        "transactions.user_id",
+        "transactions.amount",
+    ] {
         let expr = parse_expression(col_ref).expect("Failed to parse");
         let result = validate_expression(&expr, &ctx);
         assert!(result.is_ok(), "Column {} should be valid", col_ref);
     }
+}
+
+#[test]
+fn test_column_resolution_valid_join_alias() {
+    let mut ctx = CompilationContext::new();
+    ctx.add_column("transactions.amount", ColumnType::Float);
+    ctx.add_join_alias("txn", "transactions");
+
+    let expr = parse_expression("txn.amount").expect("Failed to parse");
+    let result = validate_expression(&expr, &ctx);
+    assert!(result.is_ok(), "Join alias should resolve");
 }
 
 #[test]
@@ -88,8 +104,8 @@ fn test_column_resolution_in_expression() {
     ctx.add_column("transactions.tax_rate", ColumnType::Float);
 
     // Validate column ref in a binary expression
-    let expr = parse_expression("transactions.amount * transactions.tax_rate")
-        .expect("Failed to parse");
+    let expr =
+        parse_expression("transactions.amount * transactions.tax_rate").expect("Failed to parse");
     let result = validate_expression(&expr, &ctx);
 
     assert!(result.is_ok(), "Valid columns in expression should pass");
@@ -97,7 +113,7 @@ fn test_column_resolution_in_expression() {
 
 #[test]
 fn test_column_resolution_in_function() {
-    let mut ctx = CompilationContext::new();
+    let mut ctx = CompilationContext::new().with_aggregates(true);
     ctx.add_column("transactions.amount", ColumnType::Float);
 
     // Validate column ref inside function call
@@ -154,6 +170,17 @@ fn test_type_inference_literal_null() {
     assert!(result.is_ok());
     let typed = result.unwrap();
     assert_eq!(typed.return_type, ExprType::Null);
+}
+
+#[test]
+fn test_type_inference_literal_date() {
+    let ctx = CompilationContext::new();
+    let expr = parse_expression(r#"DATE("2024-01-15")"#).expect("Failed to parse");
+    let result = validate_expression(&expr, &ctx);
+
+    assert!(result.is_ok());
+    let typed = result.unwrap();
+    assert_eq!(typed.return_type, ExprType::Date);
 }
 
 #[test]
@@ -310,6 +337,29 @@ fn test_type_inference_function_isnull() {
 }
 
 #[test]
+fn test_type_inference_boolean_functions() {
+    let ctx = CompilationContext::new();
+    for source in ["AND(TRUE, FALSE)", "OR(TRUE, FALSE)", "NOT(FALSE)"] {
+        let expr = parse_expression(source).expect("Failed to parse");
+        let result = validate_expression(&expr, &ctx);
+        assert!(result.is_ok(), "{source} should validate");
+        assert_eq!(result.unwrap().return_type, ExprType::Boolean);
+    }
+}
+
+#[test]
+fn test_today_requires_explicit_context_date() {
+    let ctx = CompilationContext::new();
+    let expr = parse_expression("TODAY()").expect("Failed to parse");
+    let result = validate_expression(&expr, &ctx);
+    assert!(result.is_err(), "TODAY() should fail without context date");
+    assert!(matches!(
+        result,
+        Err(ValidationError::InvalidFunction { .. })
+    ));
+}
+
+#[test]
 fn test_type_inference_function_sum_aggregate() {
     let mut ctx = CompilationContext::new();
     ctx.add_column("transactions.amount", ColumnType::Float);
@@ -347,12 +397,13 @@ fn test_type_check_arithmetic_invalid_string() {
     let expr = parse_expression(r#"users.name + 5"#).expect("Failed to parse");
     let result = validate_expression(&expr, &ctx);
 
-    assert!(
-        result.is_err(),
-        "String + Number should fail type check"
-    );
+    assert!(result.is_err(), "String + Number should fail type check");
     match result {
-        Err(ValidationError::TypeMismatch { expected, actual, .. }) => {
+        Err(ValidationError::TypeMismatch {
+            expected,
+            actual: _,
+            ..
+        }) => {
             assert_eq!(expected, "Number");
         }
         _ => panic!("Expected TypeMismatch error"),
@@ -377,10 +428,7 @@ fn test_type_check_logical_invalid_number() {
     let expr = parse_expression("5 AND TRUE").expect("Failed to parse");
     let result = validate_expression(&expr, &ctx);
 
-    assert!(
-        result.is_err(),
-        "Number AND Boolean should fail type check"
-    );
+    assert!(result.is_err(), "Number AND Boolean should fail type check");
 }
 
 #[test]
@@ -392,9 +440,10 @@ fn test_type_check_comparison_type_mismatch() {
     let expr = parse_expression(r#"users.name > 5"#).expect("Failed to parse");
     let result = validate_expression(&expr, &ctx);
 
-    // This may pass or fail depending on implementation; document behavior
-    // For now, we test that validation runs without panic
-    let _ = result;
+    assert!(
+        matches!(result, Err(ValidationError::TypeMismatch { .. })),
+        "String and number comparison should fail"
+    );
 }
 
 #[test]
@@ -428,6 +477,27 @@ fn test_type_check_function_argument_type() {
 }
 
 #[test]
+fn test_type_check_function_wrong_argument_count() {
+    let ctx = CompilationContext::new();
+    let expr = parse_expression("ROUND(5)").expect("Failed to parse");
+    let result = validate_expression(&expr, &ctx);
+
+    assert!(matches!(
+        result,
+        Err(ValidationError::WrongArgumentCount { .. })
+    ));
+}
+
+#[test]
+fn test_type_check_function_wrong_argument_type() {
+    let ctx = CompilationContext::new();
+    let expr = parse_expression(r#"YEAR("2024-01-15")"#).expect("Failed to parse");
+    let result = validate_expression(&expr, &ctx);
+
+    assert!(matches!(result, Err(ValidationError::TypeMismatch { .. })));
+}
+
+#[test]
 fn test_type_check_not_requires_boolean() {
     let ctx = CompilationContext::new();
 
@@ -444,7 +514,10 @@ fn test_type_check_null_compatible_all_types() {
     // NULL + number should be valid (NULL is compatible with any type)
     let expr = parse_expression("NULL + 5").expect("Failed to parse");
     let result = validate_expression(&expr, &ctx);
-    assert!(result.is_ok(), "NULL + Number should be valid (NULL is compatible)");
+    assert!(
+        result.is_ok(),
+        "NULL + Number should be valid (NULL is compatible)"
+    );
 }
 
 // ============================================================================
@@ -555,7 +628,10 @@ fn test_aggregate_context_regular_functions_allowed() {
     let expr = parse_expression("ABS(-5)").expect("Failed to parse");
     let result = validate_expression(&expr, &ctx);
 
-    assert!(result.is_ok(), "Regular functions should work without aggregates");
+    assert!(
+        result.is_ok(),
+        "Regular functions should work without aggregates"
+    );
 }
 
 #[test]
@@ -569,7 +645,10 @@ fn test_aggregate_context_multiple_aggregates() {
         .expect("Failed to parse");
     let result = validate_expression(&expr, &ctx);
 
-    assert!(result.is_ok(), "Multiple aggregates should work when allowed");
+    assert!(
+        result.is_ok(),
+        "Multiple aggregates should work when allowed"
+    );
 }
 
 // ============================================================================
@@ -603,7 +682,10 @@ fn test_selector_interpolation_nested() {
     // Nested selector: total_amount references base_amount
     let result = interpolate_selectors("{total_amount}", &ctx);
 
-    assert!(result.is_ok(), "Nested selector interpolation should succeed");
+    assert!(
+        result.is_ok(),
+        "Nested selector interpolation should succeed"
+    );
     let interpolated = result.unwrap();
     assert!(interpolated.contains("transactions.amount"));
 }
@@ -621,10 +703,10 @@ fn test_selector_interpolation_circular_simple() {
         "Circular selector reference should be detected"
     );
     match result {
-        Err(ValidationError::CircularSelectorReference { .. }) => {
+        Err(ValidationError::CircularSelectorRef { .. }) => {
             // Success: circular reference detected
         }
-        _ => panic!("Expected CircularSelectorReference error"),
+        _ => panic!("Expected CircularSelectorRef error"),
     }
 }
 
@@ -637,7 +719,10 @@ fn test_selector_interpolation_circular_indirect() {
 
     let result = interpolate_selectors("{selector_a}", &ctx);
 
-    assert!(result.is_err(), "Indirect circular reference should be detected");
+    assert!(
+        result.is_err(),
+        "Indirect circular reference should be detected"
+    );
 }
 
 #[test]
@@ -662,10 +747,10 @@ fn test_selector_interpolation_unresolved() {
 
     assert!(result.is_err(), "Unresolved selector should fail");
     match result {
-        Err(ValidationError::UnresolvedSelector { selector }) => {
+        Err(ValidationError::UnresolvedSelectorRef { selector }) => {
             assert_eq!(selector, "undefined");
         }
-        _ => panic!("Expected UnresolvedSelector error"),
+        _ => panic!("Expected UnresolvedSelectorRef error"),
     }
 }
 
@@ -691,14 +776,17 @@ fn test_selector_edge_case_unresolved_column_in_selector() {
     ctx.add_column("real.column", ColumnType::Float);
 
     // Interpolate first (should work)
-    let interpolated = interpolate_selectors("{missing_col}", &ctx)
-        .expect("Interpolation should work");
+    let interpolated =
+        interpolate_selectors("{missing_col}", &ctx).expect("Interpolation should work");
 
     // Then validate the interpolated expression
     let expr = parse_expression(&interpolated).expect("Failed to parse");
     let result = validate_expression(&expr, &ctx);
 
-    assert!(result.is_err(), "Unresolved column in selector should fail validation");
+    assert!(
+        result.is_err(),
+        "Unresolved column in selector should fail validation"
+    );
 }
 
 #[test]
@@ -780,7 +868,10 @@ fn test_end_to_end_simple_column_reference() {
     // Validate
     let result = validate_expression(&expr, &ctx);
 
-    assert!(result.is_ok(), "Simple column reference pipeline should work");
+    assert!(
+        result.is_ok(),
+        "Simple column reference pipeline should work"
+    );
     let typed = result.unwrap();
     assert_eq!(typed.return_type, ExprType::Number);
 }
@@ -831,7 +922,10 @@ fn test_end_to_end_aggregate_with_context() {
     // Validate
     let result = validate_expression(&expr, &ctx);
 
-    assert!(result.is_ok(), "Aggregate pipeline should work with context");
+    assert!(
+        result.is_ok(),
+        "Aggregate pipeline should work with context"
+    );
     let typed = result.unwrap();
     assert_eq!(typed.return_type, ExprType::Number);
 }
@@ -862,8 +956,7 @@ fn test_end_to_end_with_selector_interpolation() {
     ctx = ctx.with_aggregates(true);
 
     // Interpolate: {total_amount} -> SUM(transactions.amount)
-    let interpolated = interpolate_selectors("{total_amount}", &ctx)
-        .expect("Interpolation failed");
+    let interpolated = interpolate_selectors("{total_amount}", &ctx).expect("Interpolation failed");
 
     // Parse
     let expr = parse_expression(&interpolated).expect("Parse failed");
@@ -885,10 +978,8 @@ fn test_end_to_end_complex_expression() {
     ctx = ctx.with_aggregates(true);
 
     // Parse: SUM(transactions.amount) / COUNT(transactions.quantity) > 100
-    let expr = parse_expression(
-        "SUM(transactions.amount) / COUNT(transactions.quantity) > 100",
-    )
-    .expect("Parse failed");
+    let expr = parse_expression("SUM(transactions.amount) / COUNT(transactions.quantity) > 100")
+        .expect("Parse failed");
 
     // Validate
     let result = validate_expression(&expr, &ctx);
@@ -909,7 +1000,10 @@ fn test_end_to_end_validation_error_accumulation() {
     // Validate
     let result = validate_expression(&expr, &ctx);
 
-    assert!(result.is_err(), "Missing column should cause validation error");
+    assert!(
+        result.is_err(),
+        "Missing column should cause validation error"
+    );
     match result {
         Err(ValidationError::UnresolvedColumnRef { .. }) => {
             // Success: error properly identified
@@ -928,6 +1022,7 @@ fn test_compilation_context_creation() {
     assert!(ctx.schema.is_empty());
     assert!(ctx.selectors.is_empty());
     assert!(!ctx.allow_aggregates);
+    assert!(ctx.today.is_none());
 }
 
 #[test]

@@ -40,8 +40,8 @@ pub enum LiteralValue {
     /// Boolean literal
     Boolean(bool),
 
-    /// Date literal (ISO 8601 format)
-    Date(String),
+    /// Date literal
+    Date(chrono::NaiveDate),
 
     /// NULL literal
     Null,
@@ -98,6 +98,11 @@ impl ExprAST {
     /// Create a NULL node
     pub fn null() -> Self {
         ExprAST::Literal(LiteralValue::Null)
+    }
+
+    /// Create a date literal node
+    pub fn date(value: chrono::NaiveDate) -> Self {
+        ExprAST::Literal(LiteralValue::Date(value))
     }
 
     /// Create a column reference node

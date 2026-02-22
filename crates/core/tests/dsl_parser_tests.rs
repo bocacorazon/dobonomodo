@@ -13,8 +13,8 @@ fn test_parse_literal_number() {
     assert!(matches!(ast, ExprAST::Literal(LiteralValue::Number(n)) if n == 42.0));
 
     // Float
-    let ast = parse_expression("3.14").expect("Failed to parse float");
-    assert!(matches!(ast, ExprAST::Literal(LiteralValue::Number(n)) if (n - 3.14).abs() < 0.001));
+    let ast = parse_expression("3.5").expect("Failed to parse float");
+    assert!(matches!(ast, ExprAST::Literal(LiteralValue::Number(n)) if (n - 3.5).abs() < 0.001));
 
     // Negative number
     let ast = parse_expression("-10.5").expect("Failed to parse negative number");
@@ -58,16 +58,10 @@ fn test_parse_literal_boolean() {
 #[test]
 fn test_parse_literal_date() {
     let ast = parse_expression(r#"DATE("2024-01-15")"#).expect("Failed to parse date");
-    match ast {
-        ExprAST::FunctionCall { name, args } => {
-            assert_eq!(name, "DATE");
-            assert_eq!(args.len(), 1);
-            assert!(
-                matches!(&args[0], ExprAST::Literal(LiteralValue::String(s)) if s == "2024-01-15")
-            );
-        }
-        _ => panic!("Expected FunctionCall for DATE"),
-    }
+    assert!(matches!(
+        ast,
+        ExprAST::Literal(LiteralValue::Date(d)) if d == chrono::NaiveDate::from_ymd_opt(2024, 1, 15).expect("valid date")
+    ));
 }
 
 #[test]
@@ -136,28 +130,28 @@ fn test_parse_arithmetic_operators() {
 #[test]
 fn test_parse_comparison_operators() {
     // Equal
-    let ast = parse_expression("x = 5").expect("Failed to parse equals");
+    let ast = parse_expression("transactions.x = 5").expect("Failed to parse equals");
     match ast {
         ExprAST::BinaryOp { op, .. } => assert_eq!(op, BinaryOperator::Equal),
         _ => panic!("Expected BinaryOp"),
     }
 
     // Not equal
-    let ast = parse_expression("x <> 5").expect("Failed to parse not equals");
+    let ast = parse_expression("transactions.x <> 5").expect("Failed to parse not equals");
     match ast {
         ExprAST::BinaryOp { op, .. } => assert_eq!(op, BinaryOperator::NotEqual),
         _ => panic!("Expected BinaryOp"),
     }
 
     // Less than
-    let ast = parse_expression("x < 5").expect("Failed to parse less than");
+    let ast = parse_expression("transactions.x < 5").expect("Failed to parse less than");
     match ast {
         ExprAST::BinaryOp { op, .. } => assert_eq!(op, BinaryOperator::LessThan),
         _ => panic!("Expected BinaryOp"),
     }
 
     // Greater than
-    let ast = parse_expression("x > 5").expect("Failed to parse greater than");
+    let ast = parse_expression("transactions.x > 5").expect("Failed to parse greater than");
     match ast {
         ExprAST::BinaryOp { op, .. } => assert_eq!(op, BinaryOperator::GreaterThan),
         _ => panic!("Expected BinaryOp"),
@@ -249,7 +243,8 @@ fn test_parse_function_multiple_args() {
 
 #[test]
 fn test_parse_function_nested() {
-    let ast = parse_expression("ABS(MIN(a, b))").expect("Failed to parse nested function");
+    let ast = parse_expression("ABS(MIN(transactions.a, transactions.b))")
+        .expect("Failed to parse nested function");
     match ast {
         ExprAST::FunctionCall { name, args } => {
             assert_eq!(name, "ABS");
@@ -263,6 +258,19 @@ fn test_parse_function_nested() {
             }
         }
         _ => panic!("Expected FunctionCall"),
+    }
+}
+
+#[test]
+fn test_parse_boolean_functions() {
+    for source in [
+        "AND(TRUE, FALSE)",
+        "OR(TRUE, FALSE)",
+        "NOT(TRUE)",
+        "AND(transactions.flag, OR(TRUE, FALSE))",
+    ] {
+        let ast = parse_expression(source).expect("Failed to parse boolean function");
+        assert!(matches!(ast, ExprAST::FunctionCall { .. }));
     }
 }
 
@@ -375,6 +383,12 @@ fn test_parse_error_invalid_token() {
 #[test]
 fn test_parse_error_incomplete_expression() {
     let result = parse_expression("1 +");
+    assert!(result.is_err());
+}
+
+#[test]
+fn test_parse_error_bare_identifier_not_allowed() {
+    let result = parse_expression("just_identifier");
     assert!(result.is_err());
 }
 

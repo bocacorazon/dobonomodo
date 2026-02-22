@@ -1,0 +1,11 @@
+target/
+**/target/
+debug/
+release/
+*.log*
+.env*
+.git/
+node_modules/
+coverage/
+Dockerfile*
+.dockerignore

@@ -35,4 +35,9 @@ Rust (stable toolchain policy; project MSRV to be pinned when CI toolchain basel
 - 001-workspace-scaffold: Added Rust (stable toolchain policy; project MSRV to be pinned when CI toolchain baseline is introduced) + `polars` (lazy feature), `serde`, `serde_yaml`, `serde_json`, `uuid`, `chrono`, `anyhow`/`thiserror`
 
 <!-- MANUAL ADDITIONS START -->
+- DSL module context (002-dsl-parser):
+  - Path: `crates/core/src/dsl/`
+  - Entry points: `parse_expression`, `interpolate_selectors`, `validate_expression`, `compile_expression`, `compile_with_interpolation`
+  - Core files: `ast.rs`, `parser.rs`, `validation.rs`, `interpolation.rs`, `compiler.rs`, `context.rs`, `error.rs`
+  - Contracts/spec artifacts: `specs/002-dsl-parser/contracts/*.md`
 <!-- MANUAL ADDITIONS END -->

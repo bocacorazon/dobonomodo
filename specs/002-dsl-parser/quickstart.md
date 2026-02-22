@@ -87,6 +87,21 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 ```
 
+### 2b. Validate selector interpolation before compile
+
+```rust
+use dobo_core::dsl::{interpolate_selectors, parse_expression, validate_expression};
+
+let mut context = CompilationContext::new().with_aggregates(false);
+context.add_column("orders.status", ColumnType::String);
+context.add_selector("ACTIVE_ONLY", r#"orders.status = "active""#);
+
+let expanded = interpolate_selectors("{ACTIVE_ONLY}", &context)?;
+let ast = parse_expression(&expanded)?;
+let typed = validate_expression(&ast, &context)?;
+assert_eq!(typed.return_type, ExprType::Boolean);
+```
+
 ---
 
 ### 3. Compile to Polars Expr

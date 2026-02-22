@@ -2,6 +2,7 @@
 //!
 //! These tests verify end-to-end parsing of complete expressions from the spec.
 
+use chrono::NaiveDate;
 use dobo_core::dsl::*;
 
 // T021: Integration test for sample expressions from spec
@@ -34,7 +35,7 @@ fn test_sample_expression_comparison() {
         ExprAST::BinaryOp { op, left, right } => {
             assert_eq!(op, BinaryOperator::GreaterThanOrEqual);
             assert!(matches!(*left, ExprAST::ColumnRef { .. }));
-            assert!(matches!(*right, ExprAST::FunctionCall { .. }));
+            assert!(matches!(*right, ExprAST::Literal(LiteralValue::Date(_))));
         }
         _ => panic!("Expected BinaryOp"),
     }
@@ -177,5 +178,56 @@ fn test_sample_expression_with_parentheses() {
             // Verified structure
         }
         _ => panic!("Expected BinaryOp with Multiply"),
+    }
+}
+
+fn build_sample_compile_context() -> CompilationContext {
+    let mut ctx = CompilationContext::new()
+        .with_aggregates(true)
+        .with_today(NaiveDate::from_ymd_opt(2026, 1, 15).expect("valid fixed date"));
+
+    ctx.add_column("transactions.amount_local", ColumnType::Float);
+    ctx.add_column("transactions.source_system", ColumnType::String);
+    ctx.add_column("transactions.journal_id", ColumnType::Integer);
+    ctx.add_column("transactions.amount_reporting", ColumnType::Float);
+    ctx.add_column("fx.rate", ColumnType::Float);
+    ctx.add_column("accounts.type", ColumnType::String);
+    ctx.add_column("accounts.code", ColumnType::String);
+    ctx.add_column("accounts.name", ColumnType::String);
+    ctx.add_column("transactions.posting_date", ColumnType::Date);
+    ctx.add_selector("EMEA_ONLY", r#"transactions.source_system = "ERP""#);
+    ctx
+}
+
+#[test]
+fn test_end_to_end_compilation_pipeline() {
+    let ctx = build_sample_compile_context();
+    let compiled = compile_with_interpolation(
+        r#"IF(accounts.type = "revenue", transactions.amount_local * -1, transactions.amount_local)"#,
+        &ctx,
+    )
+    .expect("compile pipeline should succeed");
+    assert_eq!(compiled.return_type(), ExprType::Number);
+}
+
+#[test]
+fn test_spec_sample_expressions_compile_successfully() {
+    let ctx = build_sample_compile_context();
+    let samples = [
+        r#"transactions.amount_local * fx.rate"#,
+        r#"IF(accounts.type = "revenue", transactions.amount_local * -1, transactions.amount_local)"#,
+        r#"transactions.source_system = "ERP" AND transactions.amount_local > 1000"#,
+        r#"CONCAT(accounts.code, " - ", accounts.name)"#,
+        r#"SUM(transactions.amount_local)"#,
+        r#"COUNT(transactions.journal_id)"#,
+        r#"{{EMEA_ONLY}}"#,
+        r#"transactions.posting_date >= TODAY() - 30"#,
+        r#"IF(IS_NULL(transactions.amount_reporting), transactions.amount_local, transactions.amount_reporting)"#,
+    ];
+
+    for source in samples {
+        let compiled = compile_with_interpolation(source, &ctx)
+            .unwrap_or_else(|err| panic!("sample should compile: {source}: {err}"));
+        assert!(!format!("{:?}", compiled.as_expr()).is_empty());
     }
 }

@@ -2,6 +2,7 @@
 
 use crate::dsl::ast::*;
 use crate::dsl::error::ParseError;
+use chrono::NaiveDate;
 use pest::iterators::Pair;
 use pest::pratt_parser::{Assoc, Op, PrattParser};
 use pest::Parser;
@@ -189,11 +190,6 @@ fn parse_primary(pair: Pair<Rule>) -> Result<ExprAST, ParseError> {
     match rule {
         Rule::literal => parse_literal(pair),
         Rule::column_ref => parse_column_ref(pair),
-        Rule::bare_identifier => {
-            // Treat bare identifier as column reference with empty table
-            let column = pair.as_str().to_string();
-            Ok(ExprAST::column_ref("", column))
-        }
         Rule::function_call => parse_function_call(pair),
         Rule::expr => {
             // Recursively parse nested expression (from parentheses)
@@ -247,6 +243,22 @@ fn parse_literal(pair: Pair<Rule>) -> Result<ExprAST, ParseError> {
             Ok(ExprAST::boolean(value))
         }
         Rule::null_literal => Ok(ExprAST::null()),
+        Rule::date_literal => {
+            let mut date_parts = inner.into_inner();
+            let string_token = date_parts.next().ok_or_else(|| ParseError::InternalError {
+                message: "DATE literal missing string value".to_string(),
+            })?;
+            let s = string_token.as_str();
+            let raw = &s[1..s.len() - 1];
+            let value = NaiveDate::parse_from_str(raw, "%Y-%m-%d").map_err(|_| {
+                ParseError::InvalidDate {
+                    value: raw.to_string(),
+                    line: string_token.line_col().0,
+                    column: string_token.line_col().1,
+                }
+            })?;
+            Ok(ExprAST::date(value))
+        }
         _ => Err(ParseError::InternalError {
             message: format!("Unknown literal type: {:?}", inner.as_rule()),
         }),
@@ -337,7 +349,7 @@ mod tests {
 
     #[test]
     fn test_parse_function() {
-        let ast = parse_expression("SUM(x)").unwrap();
+        let ast = parse_expression("SUM(transactions.amount)").unwrap();
         match ast {
             ExprAST::FunctionCall { name, args } => {
                 assert_eq!(name, "SUM");

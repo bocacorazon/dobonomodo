@@ -62,10 +62,10 @@ pub enum ValidationError {
     InvalidAggregateContext { function: String },
 
     #[error("Unresolved selector reference: {{{selector}}}")]
-    UnresolvedSelector { selector: String },
+    UnresolvedSelectorRef { selector: String },
 
     #[error("Circular selector reference detected: {cycle}")]
-    CircularSelectorReference { cycle: String },
+    CircularSelectorRef { cycle: String },
 
     #[error("Maximum selector interpolation depth ({max_depth}) exceeded")]
     MaxInterpolationDepth { max_depth: usize },
@@ -92,6 +92,12 @@ pub enum ValidationError {
 /// Errors that can occur during compilation to Polars expressions
 #[derive(Error, Debug, Clone, PartialEq)]
 pub enum CompilationError {
+    #[error("Parse failure: {0}")]
+    ParseFailure(#[from] ParseError),
+
+    #[error("Validation failure: {0}")]
+    ValidationFailure(#[from] ValidationError),
+
     #[error("Unsupported function '{function}': {reason}")]
     UnsupportedFunction { function: String, reason: String },
 

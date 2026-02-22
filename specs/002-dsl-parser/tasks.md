@@ -93,25 +93,25 @@
 
 ### Tests for User Story 2 (MANDATORY - TDD Principle I) ⚠️
 
-- [ ] T029 [P] [US2] Unit test for column resolution in /workspace/crates/core/tests/dsl_validation_tests.rs (valid columns pass, invalid fail)
-- [ ] T030 [P] [US2] Unit test for type inference in /workspace/crates/core/tests/dsl_validation_tests.rs (literals, columns, operators, functions)
-- [ ] T031 [P] [US2] Unit test for type checking in /workspace/crates/core/tests/dsl_validation_tests.rs (arithmetic requires Number, logical requires Boolean)
-- [ ] T032 [P] [US2] Unit test for aggregate context validation in /workspace/crates/core/tests/dsl_validation_tests.rs (SUM/COUNT/AVG only when allow_aggregates=true)
-- [ ] T033 [P] [US2] Unit test for selector interpolation in /workspace/crates/core/tests/dsl_validation_tests.rs (simple, nested, circular detection)
-- [ ] T034 [P] [US2] Unit test for selector edge cases in /workspace/crates/core/tests/dsl_validation_tests.rs (unresolved selector, max depth)
-- [ ] T035 [P] [US2] Integration test for end-to-end validation in /workspace/crates/core/tests/dsl_integration_tests.rs (parse + validate pipeline)
+- [X] T029 [P] [US2] Unit test for column resolution in /workspace/crates/core/tests/dsl_validation_tests.rs (valid columns pass, invalid fail)
+- [X] T030 [P] [US2] Unit test for type inference in /workspace/crates/core/tests/dsl_validation_tests.rs (literals, columns, operators, functions)
+- [X] T031 [P] [US2] Unit test for type checking in /workspace/crates/core/tests/dsl_validation_tests.rs (arithmetic requires Number, logical requires Boolean)
+- [X] T032 [P] [US2] Unit test for aggregate context validation in /workspace/crates/core/tests/dsl_validation_tests.rs (SUM/COUNT/AVG only when allow_aggregates=true)
+- [X] T033 [P] [US2] Unit test for selector interpolation in /workspace/crates/core/tests/dsl_validation_tests.rs (simple, nested, circular detection)
+- [X] T034 [P] [US2] Unit test for selector edge cases in /workspace/crates/core/tests/dsl_validation_tests.rs (unresolved selector, max depth)
+- [X] T035 [P] [US2] Integration test for end-to-end validation in /workspace/crates/core/tests/dsl_integration_tests.rs (parse + validate pipeline)
 
 ### Implementation for User Story 2
 
-- [ ] T036 [P] [US2] Create TypedExprAST struct in /workspace/crates/core/src/dsl/types.rs with ast and return_type fields
-- [ ] T037 [P] [US2] Implement validation module /workspace/crates/core/src/dsl/validation.rs with validate_expression function
-- [ ] T038 [US2] Implement resolve_column function in /workspace/crates/core/src/dsl/validation.rs (lookup table.column in schema)
-- [ ] T039 [US2] Implement infer_type function in /workspace/crates/core/src/dsl/validation.rs (bottom-up type inference)
-- [ ] T040 [US2] Implement type checking rules in /workspace/crates/core/src/dsl/validation.rs (binary ops, function args)
-- [ ] T041 [US2] Implement aggregate context validation in /workspace/crates/core/src/dsl/validation.rs (check allow_aggregates flag)
-- [ ] T042 [P] [US2] Implement selector interpolation module /workspace/crates/core/src/dsl/interpolation.rs with interpolate_selectors function
-- [ ] T043 [US2] Implement circular reference detection in /workspace/crates/core/src/dsl/interpolation.rs (expansion stack tracking)
-- [ ] T044 [US2] Export validation API from /workspace/crates/core/src/dsl/mod.rs
+- [X] T036 [P] [US2] Create TypedExprAST struct in /workspace/crates/core/src/dsl/types.rs with ast and return_type fields
+- [X] T037 [P] [US2] Implement validation module /workspace/crates/core/src/dsl/validation.rs with validate_expression function
+- [X] T038 [US2] Implement resolve_column function in /workspace/crates/core/src/dsl/validation.rs (lookup table.column in schema)
+- [X] T039 [US2] Implement infer_type function in /workspace/crates/core/src/dsl/validation.rs (bottom-up type inference)
+- [X] T040 [US2] Implement type checking rules in /workspace/crates/core/src/dsl/validation.rs (binary ops, function args)
+- [X] T041 [US2] Implement aggregate context validation in /workspace/crates/core/src/dsl/validation.rs (check allow_aggregates flag)
+- [X] T042 [P] [US2] Implement selector interpolation module /workspace/crates/core/src/dsl/interpolation.rs with interpolate_selectors function
+- [X] T043 [US2] Implement circular reference detection in /workspace/crates/core/src/dsl/interpolation.rs (expansion stack tracking)
+- [X] T044 [US2] Export validation API from /workspace/crates/core/src/dsl/mod.rs
 
 **Checkpoint**: At this point, User Stories 1 AND 2 should both work - parse then validate expressions
 
@@ -125,35 +125,35 @@
 
 ### Tests for User Story 3 (MANDATORY - TDD Principle I) ⚠️
 
-- [ ] T045 [P] [US3] Unit test for literal compilation in /workspace/crates/core/tests/dsl_compiler_tests.rs (numbers, strings, booleans, NULL)
-- [ ] T046 [P] [US3] Unit test for column reference compilation in /workspace/crates/core/tests/dsl_compiler_tests.rs (col("table.column"))
-- [ ] T047 [P] [US3] Unit test for arithmetic operator compilation in /workspace/crates/core/tests/dsl_compiler_tests.rs (+, -, *, /)
-- [ ] T048 [P] [US3] Unit test for comparison operator compilation in /workspace/crates/core/tests/dsl_compiler_tests.rs (=, <>, <, <=, >, >=)
-- [ ] T049 [P] [US3] Unit test for logical operator compilation in /workspace/crates/core/tests/dsl_compiler_tests.rs (AND, OR, NOT)
-- [ ] T050 [P] [US3] Unit test for arithmetic functions in /workspace/crates/core/tests/dsl_compiler_tests.rs (ABS, ROUND, FLOOR, CEIL, MOD, MIN, MAX)
-- [ ] T051 [P] [US3] Unit test for string functions in /workspace/crates/core/tests/dsl_compiler_tests.rs (CONCAT, UPPER, LOWER, TRIM, LEFT, RIGHT, LEN, CONTAINS, REPLACE)
-- [ ] T052 [P] [US3] Unit test for conditional functions in /workspace/crates/core/tests/dsl_compiler_tests.rs (IF, ISNULL, COALESCE)
-- [ ] T053 [P] [US3] Unit test for date functions in /workspace/crates/core/tests/dsl_compiler_tests.rs (DATE, TODAY, YEAR, MONTH, DAY, DATEDIFF, DATEADD)
-- [ ] T054 [P] [US3] Unit test for aggregate functions in /workspace/crates/core/tests/dsl_compiler_tests.rs (SUM, COUNT, COUNT_ALL, AVG, MIN_AGG, MAX_AGG)
-- [ ] T055 [P] [US3] Contract test for Polars compatibility in /workspace/crates/core/tests/dsl_compiler_tests.rs (attach compiled Expr to dummy LazyFrame)
-- [ ] T056 [P] [US3] Integration test for end-to-end compilation in /workspace/crates/core/tests/dsl_integration_tests.rs (interpolate + parse + validate + compile)
+- [X] T045 [P] [US3] Unit test for literal compilation in /workspace/crates/core/tests/dsl_compiler_tests.rs (numbers, strings, booleans, NULL)
+- [X] T046 [P] [US3] Unit test for column reference compilation in /workspace/crates/core/tests/dsl_compiler_tests.rs (col("table.column"))
+- [X] T047 [P] [US3] Unit test for arithmetic operator compilation in /workspace/crates/core/tests/dsl_compiler_tests.rs (+, -, *, /)
+- [X] T048 [P] [US3] Unit test for comparison operator compilation in /workspace/crates/core/tests/dsl_compiler_tests.rs (=, <>, <, <=, >, >=)
+- [X] T049 [P] [US3] Unit test for logical operator compilation in /workspace/crates/core/tests/dsl_compiler_tests.rs (AND, OR, NOT)
+- [X] T050 [P] [US3] Unit test for arithmetic functions in /workspace/crates/core/tests/dsl_compiler_tests.rs (ABS, ROUND, FLOOR, CEIL, MOD, MIN, MAX)
+- [X] T051 [P] [US3] Unit test for string functions in /workspace/crates/core/tests/dsl_compiler_tests.rs (CONCAT, UPPER, LOWER, TRIM, LEFT, RIGHT, LEN, CONTAINS, REPLACE)
+- [X] T052 [P] [US3] Unit test for conditional functions in /workspace/crates/core/tests/dsl_compiler_tests.rs (IF, ISNULL, COALESCE)
+- [X] T053 [P] [US3] Unit test for date functions in /workspace/crates/core/tests/dsl_compiler_tests.rs (DATE, TODAY, YEAR, MONTH, DAY, DATEDIFF, DATEADD)
+- [X] T054 [P] [US3] Unit test for aggregate functions in /workspace/crates/core/tests/dsl_compiler_tests.rs (SUM, COUNT, COUNT_ALL, AVG, MIN_AGG, MAX_AGG)
+- [X] T055 [P] [US3] Contract test for Polars compatibility in /workspace/crates/core/tests/dsl_compiler_tests.rs (attach compiled Expr to dummy LazyFrame)
+- [X] T056 [P] [US3] Integration test for end-to-end compilation in /workspace/crates/core/tests/dsl_integration_tests.rs (interpolate + parse + validate + compile)
 
 ### Implementation for User Story 3
 
-- [ ] T057 [P] [US3] Create CompiledExpression struct in /workspace/crates/core/src/dsl/compiler.rs with source, expr, return_type fields
-- [ ] T058 [P] [US3] Create CompilationError enum in /workspace/crates/core/src/dsl/error.rs (UnsupportedFunction, PolarsCompatibility)
-- [ ] T059 [US3] Implement compiler module /workspace/crates/core/src/dsl/compiler.rs with compile_expression function
-- [ ] T060 [US3] Implement literal compilation in /workspace/crates/core/src/dsl/compiler.rs (lit(value))
-- [ ] T061 [US3] Implement column reference compilation in /workspace/crates/core/src/dsl/compiler.rs (col("table.column"))
-- [ ] T062 [US3] Implement binary operator compilation in /workspace/crates/core/src/dsl/compiler.rs (add, sub, mul, div, eq, etc.)
-- [ ] T063 [US3] Implement unary operator compilation in /workspace/crates/core/src/dsl/compiler.rs (not, negate)
-- [ ] T064 [US3] Implement arithmetic function mappings in /workspace/crates/core/src/dsl/compiler.rs (ABS, ROUND, FLOOR, CEIL, MOD, MIN, MAX)
-- [ ] T065 [US3] Implement string function mappings in /workspace/crates/core/src/dsl/compiler.rs (CONCAT, UPPER, LOWER, TRIM, LEFT, RIGHT, LEN, CONTAINS, REPLACE)
-- [ ] T066 [US3] Implement conditional function mappings in /workspace/crates/core/src/dsl/compiler.rs (IF → when/then/otherwise, ISNULL, COALESCE)
-- [ ] T067 [US3] Implement date function mappings in /workspace/crates/core/src/dsl/compiler.rs (DATE, TODAY, YEAR, MONTH, DAY, DATEDIFF, DATEADD)
-- [ ] T068 [US3] Implement aggregate function mappings in /workspace/crates/core/src/dsl/compiler.rs (SUM, COUNT, AVG, MIN_AGG, MAX_AGG)
-- [ ] T069 [US3] Implement compile_with_interpolation function in /workspace/crates/core/src/dsl/compiler.rs (full pipeline)
-- [ ] T070 [US3] Export compiler API from /workspace/crates/core/src/dsl/mod.rs
+- [X] T057 [P] [US3] Create CompiledExpression struct in /workspace/crates/core/src/dsl/compiler.rs with source, expr, return_type fields
+- [X] T058 [P] [US3] Create CompilationError enum in /workspace/crates/core/src/dsl/error.rs (UnsupportedFunction, PolarsCompatibility)
+- [X] T059 [US3] Implement compiler module /workspace/crates/core/src/dsl/compiler.rs with compile_expression function
+- [X] T060 [US3] Implement literal compilation in /workspace/crates/core/src/dsl/compiler.rs (lit(value))
+- [X] T061 [US3] Implement column reference compilation in /workspace/crates/core/src/dsl/compiler.rs (col("table.column"))
+- [X] T062 [US3] Implement binary operator compilation in /workspace/crates/core/src/dsl/compiler.rs (add, sub, mul, div, eq, etc.)
+- [X] T063 [US3] Implement unary operator compilation in /workspace/crates/core/src/dsl/compiler.rs (not, negate)
+- [X] T064 [US3] Implement arithmetic function mappings in /workspace/crates/core/src/dsl/compiler.rs (ABS, ROUND, FLOOR, CEIL, MOD, MIN, MAX)
+- [X] T065 [US3] Implement string function mappings in /workspace/crates/core/src/dsl/compiler.rs (CONCAT, UPPER, LOWER, TRIM, LEFT, RIGHT, LEN, CONTAINS, REPLACE)
+- [X] T066 [US3] Implement conditional function mappings in /workspace/crates/core/src/dsl/compiler.rs (IF → when/then/otherwise, ISNULL, COALESCE)
+- [X] T067 [US3] Implement date function mappings in /workspace/crates/core/src/dsl/compiler.rs (DATE, TODAY, YEAR, MONTH, DAY, DATEDIFF, DATEADD)
+- [X] T068 [US3] Implement aggregate function mappings in /workspace/crates/core/src/dsl/compiler.rs (SUM, COUNT, AVG, MIN_AGG, MAX_AGG)
+- [X] T069 [US3] Implement compile_with_interpolation function in /workspace/crates/core/src/dsl/compiler.rs (full pipeline)
+- [X] T070 [US3] Export compiler API from /workspace/crates/core/src/dsl/mod.rs
 
 **Checkpoint**: All user stories should now be independently functional - complete parse/validate/compile pipeline
 
@@ -163,14 +163,14 @@
 
 **Purpose**: Improvements that affect multiple user stories
 
-- [ ] T071 [P] Add quickstart examples to /workspace/specs/002-dsl-parser/quickstart.md validation section
-- [ ] T072 [P] Add comprehensive documentation comments to /workspace/crates/core/src/dsl/mod.rs
-- [ ] T073 [P] Add performance benchmarks in /workspace/crates/core/benches/dsl_benchmarks.rs (parse 1000 expressions)
-- [ ] T074 Code cleanup and clippy fixes across /workspace/crates/core/src/dsl/
-- [ ] T075 Run cargo test from /workspace/Cargo.toml to validate all integration points
-- [ ] T076 Run cargo clippy --all-targets from /workspace/Cargo.toml to validate code quality
-- [ ] T077 [P] Update /workspace/.github/agents/copilot-instructions.md with dsl module context
-- [ ] T078 Validate all sample expressions from /workspace/specs/002-dsl-parser/spec.md compile successfully
+- [X] T071 [P] Add quickstart examples to /workspace/specs/002-dsl-parser/quickstart.md validation section
+- [X] T072 [P] Add comprehensive documentation comments to /workspace/crates/core/src/dsl/mod.rs
+- [X] T073 [P] Add performance benchmarks in /workspace/crates/core/benches/dsl_benchmarks.rs (parse 1000 expressions)
+- [X] T074 Code cleanup and clippy fixes across /workspace/crates/core/src/dsl/
+- [X] T075 Run cargo test from /workspace/Cargo.toml to validate all integration points
+- [X] T076 Run cargo clippy --all-targets from /workspace/Cargo.toml to validate code quality
+- [X] T077 [P] Update /workspace/.github/agents/copilot-instructions.md with dsl module context
+- [X] T078 Validate all sample expressions from /workspace/specs/002-dsl-parser/spec.md compile successfully
 
 ---
 
