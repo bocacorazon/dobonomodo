@@ -54,6 +54,16 @@ fi
 echo "Creating worktree at $WORKTREE_DIR on branch $BRANCH..."
 git -C "$REPO_ROOT" worktree add "$WORKTREE_DIR" "$BRANCH"
 
+# Keep existing automation branches current with the latest base branch when possible.
+# This avoids stale orchestration scripts from earlier failed runs.
+if [ "$BRANCH" != "$BASE_BRANCH" ]; then
+    if git -C "$WORKTREE_DIR" merge --ff-only "$BASE_BRANCH" >/dev/null 2>&1; then
+        echo "Fast-forwarded $BRANCH to latest $BASE_BRANCH"
+    else
+        echo "Warning: Could not fast-forward $BRANCH to $BASE_BRANCH (branch has local divergence)" >&2
+    fi
+fi
+
 # Set agent environment.
 # CARGO_TARGET_DIR must be container-local because agent-run executes inside Docker.
 echo "SPECIFY_FEATURE=$BRANCH" > "$WORKTREE_DIR/.env.agent"
