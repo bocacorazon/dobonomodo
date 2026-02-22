@@ -30,6 +30,7 @@ fn interpolate_recursive(
 
     let mut output = String::with_capacity(source.len());
     let mut i = 0usize;
+    let mut literal_start = 0usize;
     let mut changed = false;
     let bytes = source.as_bytes();
 
@@ -42,6 +43,8 @@ fn interpolate_recursive(
             };
 
             if let Some((end, next_index)) = find_selector_end(source, start, double) {
+                output.push_str(&source[literal_start..i]);
+
                 let raw_name = source[start..end].trim();
                 if raw_name.is_empty() {
                     return Err(ValidationError::UnresolvedSelectorRef {
@@ -70,14 +73,16 @@ fn interpolate_recursive(
 
                 output.push_str(&expanded);
                 i = next_index;
+                literal_start = i;
                 changed = true;
                 continue;
             }
         }
 
-        output.push(source.as_bytes()[i] as char);
         i += 1;
     }
+
+    output.push_str(&source[literal_start..]);
 
     if changed {
         // A selector can expand into additional selectors.
@@ -180,5 +185,14 @@ mod tests {
         }
         let err = interpolate_selectors("{S0}", &ctx).unwrap_err();
         assert!(matches!(err, ValidationError::MaxInterpolationDepth { .. }));
+    }
+
+    #[test]
+    fn preserves_utf8_content_while_expanding_selector() {
+        let mut ctx = CompilationContext::new();
+        ctx.add_selector("A", "orders.amount");
+
+        let expanded = interpolate_selectors("café {A}", &ctx).unwrap();
+        assert_eq!(expanded, "café orders.amount");
     }
 }

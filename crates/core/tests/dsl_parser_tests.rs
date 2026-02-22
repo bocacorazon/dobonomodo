@@ -376,14 +376,38 @@ fn test_parse_error_unclosed_paren() {
 
 #[test]
 fn test_parse_error_invalid_token() {
-    let result = parse_expression("1 + @");
-    assert!(result.is_err());
+    let err = parse_expression("1 + @").expect_err("invalid token should fail");
+    match err {
+        ParseError::UnexpectedToken {
+            token,
+            line,
+            column,
+        } => {
+            assert_eq!(line, 1);
+            assert!(column >= 5);
+            assert!(token.contains('@'));
+            assert!(token.contains("expected:"));
+        }
+        other => panic!("Expected UnexpectedToken, got {other:?}"),
+    }
 }
 
 #[test]
 fn test_parse_error_incomplete_expression() {
-    let result = parse_expression("1 +");
-    assert!(result.is_err());
+    let err = parse_expression("1 +").expect_err("incomplete expression should fail");
+    match err {
+        ParseError::UnexpectedToken {
+            token,
+            line,
+            column,
+        } => {
+            assert_eq!(line, 1);
+            assert!(column >= 3);
+            assert!(token.contains("<eof>"));
+            assert!(token.contains("expected:"));
+        }
+        other => panic!("Expected UnexpectedToken, got {other:?}"),
+    }
 }
 
 #[test]

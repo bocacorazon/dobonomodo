@@ -117,7 +117,9 @@ fn compile_binary_op(op: BinaryOperator, left: Expr, right: Expr) -> Expr {
         BinaryOperator::Add => left + right,
         BinaryOperator::Subtract => left - right,
         BinaryOperator::Multiply => left * right,
-        BinaryOperator::Divide => left / right,
+        BinaryOperator::Divide => when(right.clone().eq(lit(0)))
+            .then(lit(Null {}))
+            .otherwise(left / right),
         BinaryOperator::Equal => left.eq(right),
         BinaryOperator::NotEqual => left.neq(right),
         BinaryOperator::LessThan => left.lt(right),
@@ -242,9 +244,9 @@ fn compile_function(
                 });
             }
             let mut iter = compiled_args.into_iter();
-            let mut expr = iter
-                .next()
-                .expect("compiled args should not be empty after early return");
+            let mut expr = iter.next().ok_or_else(|| CompilationError::InternalError {
+                message: "COALESCE received no arguments".to_string(),
+            })?;
             for candidate in iter {
                 expr = expr.fill_null(candidate);
             }

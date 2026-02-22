@@ -213,6 +213,38 @@ fn test_compile_null_literal_produces_null_value() {
 }
 
 #[test]
+fn test_compile_divide_by_zero_produces_null() {
+    let ctx = build_context(false);
+    let compiled = compile_source("transactions.amount / transactions.count", &ctx);
+    let out = df! {
+        "transactions.amount" => [10.0, 10.0],
+        "transactions.count" => [0i64, 2i64],
+        "transactions.flag" => [true, false],
+        "transactions.name" => ["a", "b"],
+        "transactions.date" => ["2026-01-01", "2026-01-02"],
+    }
+    .expect("dataframe should build")
+    .lazy()
+    .select([compiled.into_expr().alias("value")])
+    .collect()
+    .expect("query should execute");
+
+    let first = out
+        .column("value")
+        .expect("value column should exist")
+        .get(0)
+        .expect("first row should exist");
+    assert!(matches!(first, AnyValue::Null));
+
+    let second = out
+        .column("value")
+        .expect("value column should exist")
+        .get(1)
+        .expect("second row should exist");
+    assert_eq!(second, AnyValue::Float64(5.0));
+}
+
+#[test]
 fn test_compile_functions_have_behavior() {
     let mut ctx = build_context(false)
         .with_today(chrono::NaiveDate::from_ymd_opt(2026, 1, 15).expect("valid fixed today date"));

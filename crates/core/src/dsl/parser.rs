@@ -3,6 +3,7 @@
 use crate::dsl::ast::*;
 use crate::dsl::error::ParseError;
 use chrono::NaiveDate;
+use pest::error::{Error as PestError, ErrorVariant, InputLocation};
 use pest::iterators::Pair;
 use pest::pratt_parser::{Assoc, Op, PrattParser};
 use pest::Parser;
@@ -41,17 +42,8 @@ lazy_static::lazy_static! {
 
 /// Parse an expression string into an AST
 pub fn parse_expression(input: &str) -> Result<ExprAST, ParseError> {
-    let pairs = ExprParser::parse(Rule::expression, input).map_err(|e| {
-        let (line, column) = match e.line_col {
-            pest::error::LineColLocation::Pos((line, col)) => (line, col),
-            pest::error::LineColLocation::Span((line, col), _) => (line, col),
-        };
-        ParseError::SyntaxError {
-            line,
-            column,
-            message: format!("{}", e.variant),
-        }
-    })?;
+    let pairs = ExprParser::parse(Rule::expression, input)
+        .map_err(|e| map_pest_parse_error(input, e))?;
 
     let expr_pair = pairs
         .into_iter()
@@ -70,17 +62,8 @@ pub fn parse_expression(input: &str) -> Result<ExprAST, ParseError> {
 
 /// Parse an expression string into an AST with span information
 pub fn parse_expression_with_span(input: &str) -> Result<(ExprAST, Span), ParseError> {
-    let pairs = ExprParser::parse(Rule::expression, input).map_err(|e| {
-        let (line, column) = match e.line_col {
-            pest::error::LineColLocation::Pos((line, col)) => (line, col),
-            pest::error::LineColLocation::Span((line, col), _) => (line, col),
-        };
-        ParseError::SyntaxError {
-            line,
-            column,
-            message: format!("{}", e.variant),
-        }
-    })?;
+    let pairs = ExprParser::parse(Rule::expression, input)
+        .map_err(|e| map_pest_parse_error(input, e))?;
 
     let expr_pair = pairs
         .into_iter()
@@ -101,6 +84,67 @@ pub fn parse_expression_with_span(input: &str) -> Result<(ExprAST, Span), ParseE
 
     let ast = parse_expr(expr_pair)?;
     Ok((ast, span))
+}
+
+fn map_pest_parse_error(input: &str, error: PestError<Rule>) -> ParseError {
+    let (line, column) = match error.line_col {
+        pest::error::LineColLocation::Pos((line, col)) => (line, col),
+        pest::error::LineColLocation::Span((line, col), _) => (line, col),
+    };
+
+    let found = token_at_location(input, &error.location);
+
+    match error.variant {
+        ErrorVariant::ParsingError { positives, .. } => {
+            let expected = format_expected_rules(&positives);
+            let token = if let Some(expected) = expected {
+                format!("{} (expected: {})", found, expected)
+            } else {
+                found
+            };
+            ParseError::UnexpectedToken {
+                token,
+                line,
+                column,
+            }
+        }
+        ErrorVariant::CustomError { message } => ParseError::SyntaxError {
+            line,
+            column,
+            message,
+        },
+    }
+}
+
+fn token_at_location(input: &str, location: &InputLocation) -> String {
+    let index = match location {
+        InputLocation::Pos(index) => *index,
+        InputLocation::Span((start, _)) => *start,
+    };
+
+    if index >= input.len() {
+        "<eof>".to_string()
+    } else {
+        input[index..]
+            .chars()
+            .next()
+            .map(|ch| ch.to_string())
+            .unwrap_or_else(|| "<eof>".to_string())
+    }
+}
+
+fn format_expected_rules(rules: &[Rule]) -> Option<String> {
+    if rules.is_empty() {
+        None
+    } else {
+        Some(
+            rules
+                .iter()
+                .map(|rule| format!("{:?}", rule))
+                .collect::<Vec<_>>()
+                .join(", "),
+        )
+    }
 }
 
 /// Parse an expression using Pratt parser for precedence
