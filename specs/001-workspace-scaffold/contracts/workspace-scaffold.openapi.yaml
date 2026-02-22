@@ -1,0 +1,172 @@
+openapi: 3.1.0
+info:
+  title: Workspace Scaffold Validation Contract
+  version: 0.1.0
+  description: >-
+    Contract used during S00 planning to define machine-checkable verification
+    surfaces for workspace scaffold completeness, domain serialization readiness,
+    and IO contract availability.
+servers:
+  - url: https://example.invalid
+paths:
+  /v1/scaffold/validate:
+    get:
+      summary: Validate scaffold structure and quality gates
+      operationId: validateScaffold
+      responses:
+        '200':
+          description: Scaffold validation result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ScaffoldValidationResult'
+  /v1/entities/deserialize/validate:
+    post:
+      summary: Validate YAML/JSON deserialization for required entities
+      operationId: validateEntityDeserialization
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EntityValidationRequest'
+      responses:
+        '200':
+          description: Entity deserialization validation result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EntityValidationResult'
+  /v1/io/contracts:
+    get:
+      summary: List required IO contracts exposed by core
+      operationId: listIoContracts
+      responses:
+        '200':
+          description: Required IO contracts
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IoContractsResult'
+components:
+  schemas:
+    ScaffoldValidationResult:
+      type: object
+      required:
+        - branch
+        - checks
+        - passed
+      properties:
+        branch:
+          type: string
+          example: 001-workspace-scaffold
+        checks:
+          type: array
+          items:
+            $ref: '#/components/schemas/ValidationCheck'
+        passed:
+          type: boolean
+    ValidationCheck:
+      type: object
+      required:
+        - id
+        - status
+      properties:
+        id:
+          type: string
+          enum:
+            - workspace-root
+            - crate-structure
+            - core-modules
+            - cargo-build
+            - cargo-test
+        status:
+          type: string
+          enum:
+            - pass
+            - fail
+        detail:
+          type: string
+    EntityValidationRequest:
+      type: object
+      required:
+        - format
+        - entities
+      properties:
+        format:
+          type: string
+          enum: [yaml, json]
+        entities:
+          type: array
+          minItems: 1
+          items:
+            type: object
+            required:
+              - entityType
+              - payload
+            properties:
+              entityType:
+                type: string
+                enum:
+                  - Dataset
+                  - TableRef
+                  - ColumnDef
+                  - LookupDef
+                  - Project
+                  - OperationInstance
+                  - Run
+                  - ProjectSnapshot
+                  - ResolverSnapshot
+                  - Resolver
+                  - ResolutionRule
+                  - ResolutionStrategy
+                  - Expression
+                  - Calendar
+                  - Period
+                  - DataSource
+              payload:
+                type: object
+                additionalProperties: true
+    EntityValidationResult:
+      type: object
+      required:
+        - format
+        - results
+        - passed
+      properties:
+        format:
+          type: string
+          enum: [yaml, json]
+        results:
+          type: array
+          items:
+            type: object
+            required:
+              - entityType
+              - status
+            properties:
+              entityType:
+                type: string
+              status:
+                type: string
+                enum: [pass, fail]
+              errors:
+                type: array
+                items:
+                  type: string
+        passed:
+          type: boolean
+    IoContractsResult:
+      type: object
+      required:
+        - contracts
+      properties:
+        contracts:
+          type: array
+          items:
+            type: string
+            enum:
+              - DataLoader
+              - OutputWriter
+              - MetadataStore
+              - TraceWriter

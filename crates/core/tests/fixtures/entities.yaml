@@ -1,0 +1,82 @@
+dataset:
+  id: "00000000-0000-0000-0000-000000000101"
+  name: "GL"
+  owner: "owner"
+  version: 1
+  status: active
+  main_table:
+    name: transactions
+    temporal_mode: period
+    columns:
+      - name: id
+        type: string
+        nullable: false
+project:
+  id: "00000000-0000-0000-0000-000000000102"
+  name: "P"
+  owner: "owner"
+  version: 1
+  status: draft
+  visibility: private
+  input_dataset_id: "00000000-0000-0000-0000-000000000101"
+  input_dataset_version: 1
+  materialization: eager
+  operations:
+    - order: 1
+      type: output
+      parameters: {}
+run:
+  id: "00000000-0000-0000-0000-000000000103"
+  project_id: "00000000-0000-0000-0000-000000000102"
+  project_version: 1
+  project_snapshot:
+    input_dataset_id: "00000000-0000-0000-0000-000000000101"
+    input_dataset_version: 1
+    materialization: eager
+    operations:
+      - order: 1
+        type: output
+        parameters: {}
+    resolver_snapshots: []
+  period_ids:
+    - "00000000-0000-0000-0000-000000000104"
+  status: queued
+  trigger_type: manual
+  triggered_by: user
+resolver:
+  id: "test-resolver"
+  name: "Test"
+  version: 1
+  status: active
+  rules:
+    - name: fallback
+      data_level: any
+      strategy:
+        type: path
+        datasource_id: ds
+        path: "data/{{table_name}}.parquet"
+calendar:
+  id: "00000000-0000-0000-0000-000000000105"
+  name: "Gregorian"
+  status: active
+  is_default: true
+period:
+  id: "00000000-0000-0000-0000-000000000104"
+  identifier: "2026-01"
+  name: "January 2026"
+  calendar_id: "00000000-0000-0000-0000-000000000105"
+  year: 2026
+  sequence: 1
+  start_date: "2026-01-01"
+  end_date: "2026-01-31"
+  status: open
+datasource:
+  id: "00000000-0000-0000-0000-000000000106"
+  name: "warehouse"
+  owner: "owner"
+  status: active
+  type: database
+  options:
+    connection_string: "postgres://localhost/db"
+expression:
+  source: "transactions.amount"
