@@ -1,0 +1,23 @@
+# Rust
+/target/
+**/target/
+/debug/
+/release/
+*.rs.bk
+*.rlib
+*.prof*
+
+# Logs and env
+*.log
+.env*
+
+# Editors / OS
+.DS_Store
+Thumbs.db
+*.tmp
+*.swp
+.vscode/
+.idea/
+
+# Generated/spec session artifacts
+.specstory/

@@ -1,0 +1,23 @@
+[workspace]
+members = [
+  "crates/core",
+  "crates/api-server",
+  "crates/engine-worker",
+  "crates/cli",
+  "crates/test-resolver",
+]
+resolver = "2"
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+
+[workspace.dependencies]
+anyhow = "1"
+chrono = { version = "0.4", features = ["serde", "clock"] }
+polars = { version = "0.46", default-features = false, features = ["lazy"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+serde_yaml = "0.9"
+thiserror = "2"
+uuid = { version = "1", features = ["serde", "v7"] }
