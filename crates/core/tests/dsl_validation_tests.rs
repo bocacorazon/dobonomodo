@@ -467,15 +467,14 @@ fn test_type_check_divide_requires_number() {
 }
 
 #[test]
-fn test_type_check_divide_by_zero_reports_specific_error() {
+fn test_type_check_divide_by_zero_is_allowed_at_validation_time() {
     let ctx = CompilationContext::new();
     let expr = parse_expression("10 / 0").expect("Failed to parse");
     let result = validate_expression(&expr, &ctx);
-
-    assert!(matches!(
-        result,
-        Err(ValidationError::DivisionByZero { .. })
-    ));
+    assert!(
+        result.is_ok(),
+        "Division by zero should be handled at runtime"
+    );
 }
 
 #[test]
@@ -699,8 +698,8 @@ fn test_selector_interpolation_simple() {
     ctx.add_column("transactions.amount", ColumnType::Float);
     ctx.add_selector("total_amount", "SUM(transactions.amount)");
 
-    // Interpolate selector reference {total_amount}
-    let result = interpolate_selectors("{total_amount}", &ctx);
+    // Interpolate selector reference {{total_amount}}
+    let result = interpolate_selectors("{{total_amount}}", &ctx);
 
     assert!(
         result.is_ok(),
@@ -715,10 +714,10 @@ fn test_selector_interpolation_nested() {
     let mut ctx = CompilationContext::new();
     ctx.add_column("transactions.amount", ColumnType::Float);
     ctx.add_selector("base_amount", "transactions.amount");
-    ctx.add_selector("total_amount", "SUM({base_amount})");
+    ctx.add_selector("total_amount", "SUM({{base_amount}})");
 
     // Nested selector: total_amount references base_amount
-    let result = interpolate_selectors("{total_amount}", &ctx);
+    let result = interpolate_selectors("{{total_amount}}", &ctx);
 
     assert!(
         result.is_ok(),
@@ -732,9 +731,9 @@ fn test_selector_interpolation_nested() {
 fn test_selector_interpolation_circular_simple() {
     let mut ctx = CompilationContext::new();
     // Direct circular reference: a -> a
-    ctx.add_selector("recursive", "{recursive}");
+    ctx.add_selector("recursive", "{{recursive}}");
 
-    let result = interpolate_selectors("{recursive}", &ctx);
+    let result = interpolate_selectors("{{recursive}}", &ctx);
 
     assert!(
         result.is_err(),
@@ -752,10 +751,10 @@ fn test_selector_interpolation_circular_simple() {
 fn test_selector_interpolation_circular_indirect() {
     let mut ctx = CompilationContext::new();
     // Indirect circular: a -> b -> a
-    ctx.add_selector("selector_a", "{selector_b}");
-    ctx.add_selector("selector_b", "{selector_a}");
+    ctx.add_selector("selector_a", "{{selector_b}}");
+    ctx.add_selector("selector_b", "{{selector_a}}");
 
-    let result = interpolate_selectors("{selector_a}", &ctx);
+    let result = interpolate_selectors("{{selector_a}}", &ctx);
 
     assert!(
         result.is_err(),
@@ -771,7 +770,7 @@ fn test_selector_interpolation_multiple_selectors() {
     ctx.add_selector("avg_amount", "AVG(transactions.amount)");
 
     // Expression with multiple selector references
-    let result = interpolate_selectors("{sum_amount} + {avg_amount}", &ctx);
+    let result = interpolate_selectors("{{sum_amount}} + {{avg_amount}}", &ctx);
 
     assert!(result.is_ok(), "Multiple selector references should work");
 }
@@ -781,7 +780,7 @@ fn test_selector_interpolation_unresolved() {
     let ctx = CompilationContext::new();
 
     // Reference undefined selector
-    let result = interpolate_selectors("{undefined}", &ctx);
+    let result = interpolate_selectors("{{undefined}}", &ctx);
 
     assert!(result.is_err(), "Unresolved selector should fail");
     match result {
@@ -815,7 +814,7 @@ fn test_selector_edge_case_unresolved_column_in_selector() {
 
     // Interpolate first (should work)
     let interpolated =
-        interpolate_selectors("{missing_col}", &ctx).expect("Interpolation should work");
+        interpolate_selectors("{{missing_col}}", &ctx).expect("Interpolation should work");
 
     // Then validate the interpolated expression
     let expr = parse_expression(&interpolated).expect("Failed to parse");
@@ -833,13 +832,13 @@ fn test_selector_edge_case_max_depth() {
     ctx.add_column("transactions.amount", ColumnType::Float);
 
     // Create a chain of selectors: a -> b -> c -> d -> e (depth 4)
-    ctx.add_selector("a", "{b}");
-    ctx.add_selector("b", "{c}");
-    ctx.add_selector("c", "{d}");
-    ctx.add_selector("d", "{e}");
+    ctx.add_selector("a", "{{b}}");
+    ctx.add_selector("b", "{{c}}");
+    ctx.add_selector("c", "{{d}}");
+    ctx.add_selector("d", "{{e}}");
     ctx.add_selector("e", "transactions.amount");
 
-    let result = interpolate_selectors("{a}", &ctx);
+    let result = interpolate_selectors("{{a}}", &ctx);
 
     // Should either succeed or fail gracefully with max depth error
     if result.is_err() {
@@ -857,7 +856,7 @@ fn test_selector_edge_case_empty_selector_name() {
     let ctx = CompilationContext::new();
 
     // Empty selector reference
-    let result = interpolate_selectors("{}", &ctx);
+    let result = interpolate_selectors("{{}}", &ctx);
 
     // Should fail gracefully
     assert!(result.is_err(), "Empty selector name should fail");
@@ -869,7 +868,7 @@ fn test_selector_edge_case_special_characters_in_name() {
     ctx.add_column("transactions.amount", ColumnType::Float);
     ctx.add_selector("my_selector_123", "transactions.amount");
 
-    let result = interpolate_selectors("{my_selector_123}", &ctx);
+    let result = interpolate_selectors("{{my_selector_123}}", &ctx);
 
     assert!(
         result.is_ok(),
@@ -884,7 +883,7 @@ fn test_selector_edge_case_whitespace_handling() {
     ctx.add_selector("total", "transactions.amount");
 
     // Selector with extra whitespace
-    let result = interpolate_selectors("{ total }", &ctx);
+    let result = interpolate_selectors("{{ total }}", &ctx);
 
     // Should handle whitespace gracefully (or error clearly)
     let _ = result;
@@ -993,8 +992,9 @@ fn test_end_to_end_with_selector_interpolation() {
     ctx.add_selector("total_amount", "SUM(transactions.amount)");
     ctx = ctx.with_aggregates(true);
 
-    // Interpolate: {total_amount} -> SUM(transactions.amount)
-    let interpolated = interpolate_selectors("{total_amount}", &ctx).expect("Interpolation failed");
+    // Interpolate: {{total_amount}} -> SUM(transactions.amount)
+    let interpolated =
+        interpolate_selectors("{{total_amount}}", &ctx).expect("Interpolation failed");
 
     // Parse
     let expr = parse_expression(&interpolated).expect("Parse failed");

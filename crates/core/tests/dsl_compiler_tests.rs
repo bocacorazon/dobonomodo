@@ -20,7 +20,7 @@ fn build_context(allow_aggregates: bool) -> CompilationContext {
 
 fn compile_source(source: &str, ctx: &CompilationContext) -> CompiledExpression {
     let ast = parse_expression(source).expect("parse should succeed");
-    compile_expression(&ast, ctx).expect("compile should succeed")
+    compile_expression(source, &ast, ctx).expect("compile should succeed")
 }
 
 #[test]
@@ -188,7 +188,7 @@ fn test_contract_polars_compatibility() {
 fn test_compile_with_interpolation_end_to_end() {
     let mut ctx = build_context(false);
     ctx.add_selector("HIGH_AMOUNT", "transactions.amount > 10");
-    let source = "{HIGH_AMOUNT} AND transactions.flag = TRUE";
+    let source = "{{HIGH_AMOUNT}} AND transactions.flag = TRUE";
     let compiled = compile_with_interpolation(source, &ctx).expect("full compile should succeed");
     assert_eq!(compiled.return_type(), ExprType::Boolean);
     assert_eq!(compiled.source, source);
@@ -204,6 +204,16 @@ fn test_compile_expression_with_source_preserves_authored_text() {
         compile_expression_with_source(source, &ast, &ctx).expect("compile should succeed");
 
     assert_eq!(compiled.source, source);
+}
+
+#[test]
+fn test_compile_expression_without_source_fails() {
+    let ctx = build_context(false);
+    let ast = parse_expression("transactions.amount + 1").expect("parse should succeed");
+
+    let err = compile_expression("", &ast, &ctx).expect_err("compile should fail");
+
+    assert!(matches!(err, CompilationError::InternalError { .. }));
 }
 
 #[test]
@@ -356,6 +366,34 @@ fn test_compile_functions_have_behavior() {
         out.column("concat").expect("concat").get(0).expect("value"),
         AnyValue::String("abc-x")
     );
+}
+
+#[test]
+fn test_concat_propagates_null() {
+    let mut ctx = build_context(false);
+    ctx.add_column("s.left", ColumnType::String);
+    ctx.add_column("s.right", ColumnType::String);
+
+    let out = df! {
+        "s.left" => [Some("a"), None],
+        "s.right" => [Some("b"), Some("c")],
+    }
+    .expect("dataframe should build")
+    .lazy()
+    .select([compile_source("CONCAT(s.left, s.right)", &ctx)
+        .into_expr()
+        .alias("concat")])
+    .collect()
+    .expect("query should execute");
+
+    assert_eq!(
+        out.column("concat").expect("concat").get(0).expect("value"),
+        AnyValue::String("ab")
+    );
+    assert!(matches!(
+        out.column("concat").expect("concat").get(1).expect("value"),
+        AnyValue::Null
+    ));
 }
 
 #[test]

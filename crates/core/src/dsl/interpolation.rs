@@ -8,7 +8,7 @@ const MAX_INTERPOLATION_DEPTH: usize = 10;
 
 /// Expand selector references in an expression source.
 ///
-/// Supports both `{NAME}` and `{{NAME}}` forms.
+/// Supports `{{NAME}}` form.
 ///
 /// Accepts either a selectors map (`&HashMap<String, String>`) or a
 /// [`CompilationContext`] reference.
@@ -59,14 +59,9 @@ where
     let bytes = source.as_bytes();
 
     while i < bytes.len() {
-        if bytes[i] == b'{' {
-            let (double, start) = if i + 1 < bytes.len() && bytes[i + 1] == b'{' {
-                (true, i + 2)
-            } else {
-                (false, i + 1)
-            };
-
-            if let Some((end, next_index)) = find_selector_end(source, start, double) {
+        if bytes[i] == b'{' && i + 1 < bytes.len() && bytes[i + 1] == b'{' {
+            let start = i + 2;
+            if let Some((end, next_index)) = find_selector_end(source, start) {
                 output.push_str(&source[literal_start..i]);
 
                 let raw_name = source[start..end].trim();
@@ -116,22 +111,16 @@ where
     }
 }
 
-fn find_selector_end(source: &str, start: usize, is_double: bool) -> Option<(usize, usize)> {
-    if is_double {
-        let mut i = start;
-        let bytes = source.as_bytes();
-        while i + 1 < bytes.len() {
-            if bytes[i] == b'}' && bytes[i + 1] == b'}' {
-                return Some((i, i + 2));
-            }
-            i += 1;
+fn find_selector_end(source: &str, start: usize) -> Option<(usize, usize)> {
+    let mut i = start;
+    let bytes = source.as_bytes();
+    while i + 1 < bytes.len() {
+        if bytes[i] == b'}' && bytes[i + 1] == b'}' {
+            return Some((i, i + 2));
         }
-        None
-    } else {
-        source[start..]
-            .find('}')
-            .map(|offset| (start + offset, start + offset + 1))
+        i += 1;
     }
+    None
 }
 
 #[cfg(test)]
@@ -146,17 +135,17 @@ mod tests {
         ctx.add_column("orders.amount", ColumnType::Float);
         ctx.add_selector("A", "orders.amount");
 
-        let expanded = interpolate_selectors("{A}", &ctx).unwrap();
+        let expanded = interpolate_selectors("{{A}}", &ctx).unwrap();
         assert_eq!(expanded, "orders.amount");
     }
 
     #[test]
     fn detects_circular_selector() {
         let mut ctx = CompilationContext::new();
-        ctx.add_selector("A", "{B}");
-        ctx.add_selector("B", "{A}");
+        ctx.add_selector("A", "{{B}}");
+        ctx.add_selector("B", "{{A}}");
 
-        let err = interpolate_selectors("{A}", &ctx).unwrap_err();
+        let err = interpolate_selectors("{{A}}", &ctx).unwrap_err();
         assert!(matches!(err, ValidationError::CircularSelectorRef { .. }));
     }
 
@@ -172,25 +161,25 @@ mod tests {
     #[test]
     fn collects_nested_selectors() {
         let mut ctx = CompilationContext::new();
-        ctx.add_selector("A", "{B}");
-        ctx.add_selector("B", "{C}");
+        ctx.add_selector("A", "{{B}}");
+        ctx.add_selector("B", "{{C}}");
         ctx.add_selector("C", "TRUE");
 
-        let expanded = interpolate_selectors("{A}", &ctx).unwrap();
+        let expanded = interpolate_selectors("{{A}}", &ctx).unwrap();
         assert_eq!(expanded, "TRUE");
     }
 
     #[test]
     fn unresolved_selector_fails() {
         let ctx = CompilationContext::new();
-        let err = interpolate_selectors("{MISSING}", &ctx).unwrap_err();
+        let err = interpolate_selectors("{{MISSING}}", &ctx).unwrap_err();
         assert!(matches!(err, ValidationError::UnresolvedSelectorRef { .. }));
     }
 
     #[test]
     fn empty_selector_fails() {
         let ctx = CompilationContext::new();
-        let err = interpolate_selectors("{}", &ctx).unwrap_err();
+        let err = interpolate_selectors("{{}}", &ctx).unwrap_err();
         assert!(matches!(err, ValidationError::UnresolvedSelectorRef { .. }));
     }
 
@@ -202,12 +191,12 @@ mod tests {
             let current = format!("S{idx}");
             let next = format!("S{}", idx + 1);
             seen.insert(current.clone());
-            ctx.add_selector(current, format!("{{{next}}}"));
+            ctx.add_selector(current, format!("{{{{{next}}}}}"));
         }
         for key in &seen {
             assert!(ctx.get_selector(key).is_some());
         }
-        let err = interpolate_selectors("{S0}", &ctx).unwrap_err();
+        let err = interpolate_selectors("{{S0}}", &ctx).unwrap_err();
         assert!(matches!(err, ValidationError::MaxInterpolationDepth { .. }));
     }
 
@@ -216,7 +205,16 @@ mod tests {
         let mut ctx = CompilationContext::new();
         ctx.add_selector("A", "orders.amount");
 
-        let expanded = interpolate_selectors("café {A}", &ctx).unwrap();
+        let expanded = interpolate_selectors("café {{A}}", &ctx).unwrap();
         assert_eq!(expanded, "café orders.amount");
+    }
+
+    #[test]
+    fn single_brace_tokens_are_left_as_literal_text() {
+        let mut ctx = CompilationContext::new();
+        ctx.add_selector("A", "orders.amount");
+
+        let expanded = interpolate_selectors("{A}", &ctx).unwrap();
+        assert_eq!(expanded, "{A}");
     }
 }

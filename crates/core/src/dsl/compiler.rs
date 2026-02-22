@@ -43,18 +43,16 @@ impl CompiledExpression {
 
 /// Compile an AST expression to Polars Expr.
 pub fn compile_expression(
-    ast: &ExprAST,
-    context: &CompilationContext,
-) -> Result<CompiledExpression, CompilationError> {
-    compile_expression_with_source(&ast.to_string(), ast, context)
-}
-
-/// Compile an AST expression with an explicit authored source string.
-pub fn compile_expression_with_source(
     source: &str,
     ast: &ExprAST,
     context: &CompilationContext,
 ) -> Result<CompiledExpression, CompilationError> {
+    if source.is_empty() {
+        return Err(CompilationError::InternalError {
+            message: "compile_expression requires non-empty authored source".to_string(),
+        });
+    }
+
     validate_expression(ast, context)?;
     let return_type = infer_type(ast, context)?;
     let expr = compile_ast(ast, context)?;
@@ -66,6 +64,15 @@ pub fn compile_expression_with_source(
     })
 }
 
+/// Compile an AST expression with an explicit authored source string.
+pub fn compile_expression_with_source(
+    source: &str,
+    ast: &ExprAST,
+    context: &CompilationContext,
+) -> Result<CompiledExpression, CompilationError> {
+    compile_expression(source, ast, context)
+}
+
 /// Full pipeline: interpolation -> parse -> validate -> compile.
 pub fn compile_with_interpolation(
     source: &str,
@@ -73,7 +80,7 @@ pub fn compile_with_interpolation(
 ) -> Result<CompiledExpression, CompilationError> {
     let expanded = interpolate_selectors(source, context)?;
     let ast = parse_expression(&expanded)?;
-    compile_expression_with_source(source, &ast, context)
+    compile_expression(source, &ast, context)
 }
 
 fn compile_ast(ast: &ExprAST, context: &CompilationContext) -> Result<Expr, CompilationError> {
@@ -290,7 +297,7 @@ fn compile_function(
                     reason: "CONCAT requires at least one argument".to_string(),
                 });
             }
-            concat_str(compiled_args, "", true)
+            concat_str(compiled_args, "", false)
         }
         "UPPER" => require_arg(&compiled_args, &normalized)?
             .str()

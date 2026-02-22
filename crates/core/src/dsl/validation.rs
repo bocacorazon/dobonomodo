@@ -136,12 +136,6 @@ fn type_check(ast: &ExprAST, context: &CompilationContext) -> Result<(), Validat
                             context: format!("right operand of {}", op),
                         });
                     }
-                    if matches!(right.as_ref(), ExprAST::Literal(LiteralValue::Number(n)) if *n == 0.0)
-                    {
-                        return Err(ValidationError::DivisionByZero {
-                            context: format!("{ast:?}"),
-                        });
-                    }
                 }
 
                 BinaryOperator::And | BinaryOperator::Or => {

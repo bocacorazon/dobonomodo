@@ -83,9 +83,6 @@ pub enum ValidationError {
         actual: usize,
     },
 
-    #[error("Division by zero in expression '{context}'")]
-    DivisionByZero { context: String },
-
     #[error("Validation internal error: {message}")]
     InternalError { message: String },
 }

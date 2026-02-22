@@ -14,7 +14,7 @@
 //! # Key APIs
 //!
 //! - [`parse_expression`]: parse source text into [`ExprAST`]
-//! - [`interpolate_selectors`]: expand `{NAME}`/`{{NAME}}` references
+//! - [`interpolate_selectors`]: expand `{{NAME}}` references
 //! - [`validate_expression`]: resolve columns and enforce type rules
 //! - [`compile_expression`]: compile AST to Polars [`Expr`]
 //! - [`compile_with_interpolation`]: full source-to-Expr pipeline
@@ -24,9 +24,10 @@
 //! ```ignore
 //! use dobo_core::dsl::{parse_expression, validate_expression, compile_expression};
 //!
-//! let ast = parse_expression("transactions.amount * 1.1")?;
+//! let source = "transactions.amount * 1.1";
+//! let ast = parse_expression(source)?;
 //! let typed_ast = validate_expression(&ast, &schema, &context)?;
-//! let polars_expr = compile_expression(&typed_ast)?;
+//! let polars_expr = compile_expression(source, &typed_ast, &context)?.into_expr();
 //! ```
 //!
 //! ```ignore
@@ -36,7 +37,7 @@
 //! context.add_column("transactions.amount", ColumnType::Float);
 //! context.add_selector("HIGH", "transactions.amount > 1000");
 //!
-//! let compiled = compile_with_interpolation("{HIGH} AND SUM(transactions.amount) > 0", &context)?;
+//! let compiled = compile_with_interpolation("{{HIGH}} AND SUM(transactions.amount) > 0", &context)?;
 //! let expr = compiled.into_expr();
 //! ```
 
