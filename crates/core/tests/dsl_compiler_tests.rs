@@ -369,3 +369,102 @@ fn test_trim_removes_tabs_and_newlines() {
         AnyValue::String("abc")
     );
 }
+
+#[test]
+fn test_date_minus_number_uses_days_duration() {
+    let mut ctx = build_context(false);
+    ctx.add_column("transactions.posting_date", ColumnType::Date);
+
+    let threshold = compile_with_interpolation("TODAY() - 30", &ctx)
+        .expect("compile should succeed")
+        .into_expr();
+    let comparison = compile_with_interpolation("transactions.posting_date >= TODAY() - 30", &ctx)
+        .expect("compile should succeed")
+        .into_expr();
+
+    let out = df! {
+        "transactions.posting_date" => [
+            chrono::NaiveDate::from_ymd_opt(2025, 12, 15).expect("valid date"),
+            chrono::NaiveDate::from_ymd_opt(2025, 12, 16).expect("valid date"),
+            chrono::NaiveDate::from_ymd_opt(2026, 1, 15).expect("valid date"),
+        ],
+    }
+    .expect("dataframe should build")
+    .lazy()
+    .select([threshold.alias("threshold"), comparison.alias("is_recent")])
+    .collect()
+    .expect("query should execute");
+
+    let threshold_string = out
+        .column("threshold")
+        .expect("threshold column should exist")
+        .cast(&DataType::String)
+        .expect("cast to string should succeed")
+        .get(0)
+        .expect("row should exist")
+        .to_string();
+    assert!(threshold_string.contains("2025-12-16"));
+
+    assert_eq!(
+        out.column("is_recent")
+            .expect("is_recent column should exist")
+            .get(0)
+            .expect("first row should exist"),
+        AnyValue::Boolean(false)
+    );
+    assert_eq!(
+        out.column("is_recent")
+            .expect("is_recent column should exist")
+            .get(1)
+            .expect("second row should exist"),
+        AnyValue::Boolean(true)
+    );
+    assert_eq!(
+        out.column("is_recent")
+            .expect("is_recent column should exist")
+            .get(2)
+            .expect("third row should exist"),
+        AnyValue::Boolean(true)
+    );
+}
+
+#[test]
+fn test_date_parses_string_expression_at_runtime() {
+    let mut ctx = build_context(false);
+    ctx.add_column("s.value", ColumnType::String);
+
+    let valid_out = df! {
+        "s.value" => ["2026-01-31"],
+    }
+    .expect("dataframe should build")
+    .lazy()
+    .select([compile_source("DATE(s.value)", &ctx)
+        .into_expr()
+        .alias("parsed")])
+    .collect()
+    .expect("query should execute");
+
+    let parsed_string = valid_out
+        .column("parsed")
+        .expect("parsed column should exist")
+        .cast(&DataType::String)
+        .expect("cast should succeed")
+        .get(0)
+        .expect("row should exist")
+        .to_string();
+    assert!(parsed_string.contains("2026-01-31"));
+
+    let invalid = df! {
+        "s.value" => ["not-a-date"],
+    }
+    .expect("dataframe should build")
+    .lazy()
+    .select([compile_source("DATE(s.value)", &ctx)
+        .into_expr()
+        .alias("parsed")])
+    .collect();
+    assert!(
+        invalid.is_err(),
+        "invalid date input should raise parse error"
+    );
+}

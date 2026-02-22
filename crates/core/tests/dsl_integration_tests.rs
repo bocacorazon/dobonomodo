@@ -4,6 +4,8 @@
 
 use chrono::NaiveDate;
 use dobo_core::dsl::*;
+use polars::df;
+use polars::prelude::{AnyValue, IntoLazy};
 
 // T021: Integration test for sample expressions from spec
 
@@ -230,4 +232,72 @@ fn test_spec_sample_expressions_compile_successfully() {
             .unwrap_or_else(|err| panic!("sample should compile: {source}: {err}"));
         assert!(!format!("{:?}", compiled.as_expr()).is_empty());
     }
+}
+
+#[test]
+fn test_spec_sample_today_minus_30_behavior() {
+    let ctx = build_sample_compile_context();
+    let compiled = compile_with_interpolation(r#"transactions.posting_date >= TODAY() - 30"#, &ctx)
+        .expect("sample should compile");
+
+    let out = df! {
+        "transactions.amount_local" => [1.0, 1.0, 1.0],
+        "transactions.source_system" => ["ERP", "ERP", "ERP"],
+        "transactions.journal_id" => [1i64, 2i64, 3i64],
+        "transactions.amount_reporting" => [1.0, 1.0, 1.0],
+        "fx.rate" => [1.0, 1.0, 1.0],
+        "accounts.type" => ["revenue", "revenue", "expense"],
+        "accounts.code" => ["1000", "1001", "1002"],
+        "accounts.name" => ["A", "B", "C"],
+        "transactions.posting_date" => [
+            NaiveDate::from_ymd_opt(2026, 1, 15).expect("valid date"),
+            NaiveDate::from_ymd_opt(2025, 12, 16).expect("valid date"),
+            NaiveDate::from_ymd_opt(2025, 12, 15).expect("valid date"),
+        ],
+    }
+    .expect("dataframe should build")
+    .lazy()
+    .select([compiled.into_expr().alias("matches")])
+    .collect()
+    .expect("query should execute");
+
+    assert_eq!(
+        out.column("matches")
+            .expect("matches column")
+            .get(0)
+            .expect("row 0"),
+        AnyValue::Boolean(true)
+    );
+    assert_eq!(
+        out.column("matches")
+            .expect("matches column")
+            .get(1)
+            .expect("row 1"),
+        AnyValue::Boolean(true)
+    );
+    assert_eq!(
+        out.column("matches")
+            .expect("matches column")
+            .get(2)
+            .expect("row 2"),
+        AnyValue::Boolean(false)
+    );
+}
+
+#[test]
+fn test_round_accepts_expression_decimals() {
+    let ctx = build_sample_compile_context();
+    let compiled = compile_with_interpolation("ROUND(transactions.amount_local, fx.rate)", &ctx)
+        .expect("ROUND with dynamic decimals should compile");
+
+    assert!(!format!("{:?}", compiled.as_expr()).is_empty());
+}
+
+#[test]
+fn test_date_accepts_string_expression_argument() {
+    let ctx = build_sample_compile_context();
+    let compiled = compile_with_interpolation("DATE(accounts.name)", &ctx)
+        .expect("DATE with string expression should compile");
+
+    assert!(!format!("{:?}", compiled.as_expr()).is_empty());
 }

@@ -498,6 +498,32 @@ fn test_type_check_function_wrong_argument_type() {
 }
 
 #[test]
+fn test_round_accepts_numeric_decimal_expression() {
+    let ctx = CompilationContext::new();
+    let expr = parse_expression("ROUND(5, 1.5)").expect("Failed to parse");
+    let result = validate_expression(&expr, &ctx);
+
+    assert!(
+        result.is_ok(),
+        "ROUND should accept numeric decimal expressions"
+    );
+}
+
+#[test]
+fn test_date_accepts_string_expression_argument() {
+    let mut ctx = CompilationContext::new();
+    ctx.add_column("users.name", ColumnType::String);
+
+    let expr = parse_expression("DATE(users.name)").expect("Failed to parse");
+    let result = validate_expression(&expr, &ctx);
+
+    assert!(
+        result.is_ok(),
+        "DATE should accept string expression arguments"
+    );
+}
+
+#[test]
 fn test_type_check_not_requires_boolean() {
     let ctx = CompilationContext::new();
 

@@ -11,7 +11,7 @@ use chrono::NaiveDate;
 use polars::datatypes::{DataType, TimeUnit};
 use polars::lazy::dsl::functions::concat_str;
 use polars::lazy::dsl::{col, len, lit, when, Expr};
-use polars::prelude::Null;
+use polars::prelude::{Null, StrptimeOptions};
 
 /// Result of a successful expression compilation.
 #[derive(Debug, Clone)]
@@ -87,9 +87,13 @@ fn compile_ast(ast: &ExprAST, context: &CompilationContext) -> Result<Expr, Comp
             Ok(col(name))
         }
         ExprAST::BinaryOp { op, left, right } => {
+            let left_type = infer_type(left, context)?;
+            let right_type = infer_type(right, context)?;
             let left_expr = compile_ast(left, context)?;
             let right_expr = compile_ast(right, context)?;
-            Ok(compile_binary_op(*op, left_expr, right_expr))
+            Ok(compile_binary_op(
+                *op, left_expr, right_expr, left_type, right_type,
+            ))
         }
         ExprAST::UnaryOp { op, operand } => {
             let operand_expr = compile_ast(operand, context)?;
@@ -112,10 +116,28 @@ fn compile_literal(value: &LiteralValue) -> Expr {
     }
 }
 
-fn compile_binary_op(op: BinaryOperator, left: Expr, right: Expr) -> Expr {
+fn compile_binary_op(
+    op: BinaryOperator,
+    left: Expr,
+    right: Expr,
+    left_type: ExprType,
+    right_type: ExprType,
+) -> Expr {
     match op {
-        BinaryOperator::Add => left + right,
-        BinaryOperator::Subtract => left - right,
+        BinaryOperator::Add => {
+            if left_type == ExprType::Date && right_type == ExprType::Number {
+                left + days_to_duration(right)
+            } else {
+                left + right
+            }
+        }
+        BinaryOperator::Subtract => {
+            if left_type == ExprType::Date && right_type == ExprType::Number {
+                left - days_to_duration(right)
+            } else {
+                left - right
+            }
+        }
         BinaryOperator::Multiply => left * right,
         BinaryOperator::Divide => when(right.clone().eq(lit(0)))
             .then(lit(Null {}))
@@ -129,6 +151,11 @@ fn compile_binary_op(op: BinaryOperator, left: Expr, right: Expr) -> Expr {
         BinaryOperator::And => left.and(right),
         BinaryOperator::Or => left.or(right),
     }
+}
+
+fn days_to_duration(days: Expr) -> Expr {
+    let duration_ms = days.cast(DataType::Int64) * lit(86_400_000i64);
+    duration_ms.cast(DataType::Duration(TimeUnit::Milliseconds))
 }
 
 fn compile_function(
@@ -152,8 +179,9 @@ fn compile_function(
         }
         "ROUND" => {
             let value = require_arg(&compiled_args, &normalized)?;
-            let decimals = extract_non_negative_usize_literal(args, 1, &normalized)?;
-            value.round(decimals as u32)
+            let (_, decimals) = require_binary_args(&compiled_args, &normalized)?;
+            let factor = lit(10.0).pow(decimals.cast(DataType::Float64));
+            (value * factor.clone()).round(0) / factor
         }
         "FLOOR" => require_arg(&compiled_args, &normalized)?.floor(),
         "CEIL" => require_arg(&compiled_args, &normalized)?.ceil(),
@@ -317,7 +345,9 @@ fn compile_function(
                     })?;
                     lit(parsed)
                 }
-                _ => require_arg(&compiled_args, &normalized)?,
+                _ => require_arg(&compiled_args, &normalized)?
+                    .str()
+                    .to_date(StrptimeOptions::default()),
             }
         }
         "TODAY" => {
@@ -377,28 +407,4 @@ fn require_binary_args(args: &[Expr], function: &str) -> Result<(Expr, Expr), Co
         });
     }
     Ok((args[0].clone(), args[1].clone()))
-}
-
-fn extract_non_negative_usize_literal(
-    args: &[ExprAST],
-    index: usize,
-    function: &str,
-) -> Result<usize, CompilationError> {
-    let arg = args
-        .get(index)
-        .ok_or_else(|| CompilationError::UnsupportedFunction {
-            function: function.to_string(),
-            reason: format!("Missing argument {}", index + 1),
-        })?;
-    match arg {
-        ExprAST::Literal(LiteralValue::Number(n)) if *n >= 0.0 => Ok(*n as usize),
-        ExprAST::Literal(LiteralValue::Number(_)) => Err(CompilationError::UnsupportedFunction {
-            function: function.to_string(),
-            reason: format!("Argument {} must be non-negative", index + 1),
-        }),
-        _ => Err(CompilationError::UnsupportedFunction {
-            function: function.to_string(),
-            reason: format!("Argument {} must be a numeric literal", index + 1),
-        }),
-    }
 }

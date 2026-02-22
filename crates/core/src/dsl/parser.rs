@@ -42,8 +42,8 @@ lazy_static::lazy_static! {
 
 /// Parse an expression string into an AST
 pub fn parse_expression(input: &str) -> Result<ExprAST, ParseError> {
-    let pairs = ExprParser::parse(Rule::expression, input)
-        .map_err(|e| map_pest_parse_error(input, e))?;
+    let pairs =
+        ExprParser::parse(Rule::expression, input).map_err(|e| map_pest_parse_error(input, e))?;
 
     let expr_pair = pairs
         .into_iter()
@@ -62,8 +62,8 @@ pub fn parse_expression(input: &str) -> Result<ExprAST, ParseError> {
 
 /// Parse an expression string into an AST with span information
 pub fn parse_expression_with_span(input: &str) -> Result<(ExprAST, Span), ParseError> {
-    let pairs = ExprParser::parse(Rule::expression, input)
-        .map_err(|e| map_pest_parse_error(input, e))?;
+    let pairs =
+        ExprParser::parse(Rule::expression, input).map_err(|e| map_pest_parse_error(input, e))?;
 
     let expr_pair = pairs
         .into_iter()
