@@ -200,6 +200,8 @@
   },
   "active": "5346e1073dac9bb4",
   "lastOpenFiles": [
+    "docs/architecture/system-architecture.md",
+    "docs/architecture",
     "docs/capabilities/execute-test-scenario.md",
     "docs/capabilities/activate-project.md",
     "docs/entities/resolver.md",
