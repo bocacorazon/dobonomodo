@@ -19,17 +19,8 @@ An Operation is a single, typed unit of work within a Project. Each Operation sp
 | `name` | `String` | Yes | Non-empty | Human-readable label |
 | `description` | `String` | No | — | Optional narrative explanation |
 | `type` | `Enum` | Yes | `update \| aggregate \| append \| output \| delete` | Determines which argument schema applies |
-| `selector` | `SelectorRef` | No | Boolean Expression or named project-level selector; when omitted, the operation applies to all non-deleted rows | Row filter controlling which rows this operation acts on |
+| `selector` | `Expression` | No | Boolean Expression string; use `{{SELECTOR_NAME}}` to reference a named selector defined in the enclosing Project's `selectors` map; when omitted, the operation applies to all non-deleted rows | Row filter controlling which rows this operation acts on |
 | `arguments` | `Map` | Yes | Schema is fully determined by `type`; see per-type argument tables below | Type-specific configuration |
-
-### SelectorRef (embedded structure)
-
-A selector is one of:
-
-| Form | Description |
-|---|---|
-| `inline: <expression>` | A boolean Expression string evaluated at runtime |
-| `named: <string>` | Reference to a named selector defined in the enclosing Project's `selectors` registry |
 
 ---
 
@@ -129,14 +120,13 @@ Optionally, the output can be **registered as a named Dataset** in the system, m
 
 ## Project-Level Named Selectors
 
-A Project may define a registry of reusable named selectors, scoped to that Project. Each named selector is a boolean Expression that can be referenced by name in any Operation's `selector` field within the same Project.
+Named selectors are defined in the enclosing **Project** under a `selectors` map (`name → boolean Expression`). They are referenced inside any Operation `selector` (or `source_selector` in `append`) using the `{{NAME}}` interpolation syntax:
 
-| Field | Type | Required | Description |
-|---|---|---|---|
-| `name` | `String` | Yes | Unique name within the Project |
-| `expression` | `Expression` | Yes | Boolean expression defining the selection criteria |
+```
+"{{active_orders}}"
+```
 
-Named selectors are captured verbatim in the ProjectSnapshot at Run creation, ensuring reproducibility.
+The engine substitutes the named selector's expression before evaluation. Named selectors are captured verbatim in the ProjectSnapshot at Run creation, ensuring reproducibility.
 
 ---
 
@@ -149,7 +139,7 @@ Named selectors are captured verbatim in the ProjectSnapshot at Run creation, en
 | BR-003 | Reordering operations on an `active` Project MUST trigger creation of a new Project version. |
 | BR-004 | Rows with `_deleted = true` are automatically excluded from the working dataset seen by all operations, unless the operation explicitly opts in (only `output` supports `include_deleted`). |
 | BR-005 | When `selector` is omitted, the operation applies to all non-deleted rows. |
-| BR-006 | A named selector MUST be defined in the enclosing Project before it can be referenced by an Operation. Referencing an undefined named selector is a compile-time error. |
+| BR-006 | A named selector referenced as `{{NAME}}` MUST be defined in the enclosing Project's `selectors` map. Referencing an undefined name is a compile-time error. |
 | BR-007 | Each `update` assignment MUST have an `expression`. Column references in that expression MAY include aliases defined in the same operation's `joins` list. |
 | BR-008 | `update` joins are operation-scoped — their aliases are not visible to any other operation in the pipeline. |
 | BR-009 | `aggregate` appends new rows; it does NOT replace or remove existing rows in the working dataset. |
@@ -211,10 +201,7 @@ operation:
   name: string
   description: string           # optional
   type: update | aggregate | append | output | delete
-  selector:                     # optional; omit to apply to all non-deleted rows
-    inline: <expression>        # boolean expression string
-    # OR
-    named: <string>             # reference to a project-level named selector
+  selector: <expression>        # optional; boolean expression string; use {{NAME}} to reference a named selector
   arguments: <type-specific>    # see per-type schemas below
 ```
 
@@ -267,18 +254,16 @@ arguments:
 ### Annotated Example
 
 ```yaml
-# Project-level named selectors (defined in Project, referenced by Operations)
-selectors:
-  - name: "active_orders"
-    expression: "orders.status = \"active\""
+# Project-level named selectors (defined in Project.selectors, referenced via {{NAME}})
+# selectors:
+#   active_orders: "orders.status = \"active\""
 
 # Operation 1: tag rows by region
 - id: "op-001"
   seq: 1
   name: "Tag EMEA orders"
   type: update
-  selector:
-    inline: "orders.region = \"EMEA\""
+  selector: "orders.region = \"EMEA\""
   arguments:
     assignments:
       - column: "_labels"
@@ -289,8 +274,7 @@ selectors:
   seq: 2
   name: "Add customer tier and discounted price"
   type: update
-  selector:
-    named: "active_orders"
+  selector: "{{active_orders}}"
   arguments:
     joins:
       - alias: "customers"
@@ -324,16 +308,14 @@ selectors:
   seq: 4
   name: "Remove zero-amount rows"
   type: delete
-  selector:
-    inline: "orders.amount = 0"
+  selector: "orders.amount = 0"
 
 # Operation 5: write output (active rows only, no deleted)
 - id: "op-005"
   seq: 5
   name: "Write to warehouse"
   type: output
-  selector:
-    named: "active_orders"
+  selector: "{{active_orders}}"
   arguments:
     destination:
       datasource_id: "ds-warehouse"

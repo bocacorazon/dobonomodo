@@ -27,6 +27,7 @@ A Project is the central unit of computation intent in DobONoMoDo. Without it, t
 | `input_dataset_version` | `Integer` | Yes | Pinned at activation; updated only on explicit user upgrade | The specific Dataset version this Project is bound to |
 | `materialization` | `Enum` | Yes | `eager` \| `runtime` | How pre-defined Dataset joins are resolved; applies to all joins uniformly |
 | `operations` | `List<OperationInstance>` | Yes | At least one entry; executed in declared order | The ordered sequence of operations that constitute the recipe |
+| `selectors` | `Map<String, Expression>` | No | Keys are unique names (no spaces); values are boolean Expression strings | Named, reusable row filters scoped to this Project. Referenced in Operation `selector` fields as `{{NAME}}` |
 | `conflict_report` | `ConflictReport` | No | Present only when `status` is `conflict` | Describes which Dataset changes broke which operations |
 | `created_at` | `Timestamp` | Yes | System-set on creation; immutable | Creation time |
 | `updated_at` | `Timestamp` | Yes | System-set on every change | Last modification time |
@@ -137,6 +138,8 @@ project:
   input_dataset_id: uuid            # required; references a registered, active Dataset
   input_dataset_version: integer    # required; pinned at activation; changed only on explicit upgrade
   materialization: eager | runtime  # required; applies to all pre-defined Dataset joins
+  selectors:                        # optional; named reusable row filters scoped to this Project
+    <name>: <boolean expression>    # referenced in operations as {{name}}
   conflict_report:                  # present only when status is `conflict`
     dataset_version_from: integer   # the pinned version at time of conflict detection
     dataset_version_to: integer     # the new Dataset version that introduced breaking changes
