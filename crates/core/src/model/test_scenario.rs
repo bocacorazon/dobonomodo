@@ -1,10 +1,40 @@
-use anyhow::{bail, Context, Result};
 use chrono::NaiveDate;
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
+use thiserror::Error;
 use uuid::Uuid;
 
 use super::{Dataset, LookupTarget, Project};
+
+type ValidationResult<T> = std::result::Result<T, TestScenarioError>;
+
+#[derive(Debug, Error)]
+pub enum TestScenarioError {
+    #[error("TestScenario must have at least one period")]
+    MissingPeriods,
+    #[error(
+        "Period '{identifier}': start_date ({start_date}) must be before or equal to end_date ({end_date})"
+    )]
+    InvalidPeriodRange {
+        identifier: String,
+        start_date: NaiveDate,
+        end_date: NaiveDate,
+    },
+    #[error("DataBlock '{name}' is invalid: {reason}")]
+    InvalidInputDataBlock { name: String, reason: String },
+    #[error("input.data is missing required table data for: {tables:?}")]
+    MissingRequiredTables { tables: Vec<String> },
+    #[error(
+        "input.data contains unknown table keys not present in dataset definition: {tables:?}"
+    )]
+    UnknownTableKeys { tables: Vec<String> },
+    #[error("expected_output.data is invalid: {reason}")]
+    InvalidExpectedOutputDataBlock { reason: String },
+    #[error("DataBlock cannot have both rows and file")]
+    DataBlockHasRowsAndFile,
+    #[error("DataBlock must have either rows or file")]
+    DataBlockMissingRowsAndFile,
+}
 
 // ============================================================================
 // Core Test Scenario Definition
@@ -43,10 +73,10 @@ pub struct TestScenario {
 
 impl TestScenario {
     /// Validate the scenario structure
-    pub fn validate(&self) -> Result<()> {
+    pub fn validate(&self) -> ValidationResult<()> {
         // Periods must have at least one entry
         if self.periods.is_empty() {
-            bail!("TestScenario must have at least one period");
+            return Err(TestScenarioError::MissingPeriods);
         }
 
         // Validate each period
@@ -58,7 +88,10 @@ impl TestScenario {
         for (name, block) in &self.input.data {
             block
                 .validate()
-                .with_context(|| format!("DataBlock '{}'", name))?;
+                .map_err(|error| TestScenarioError::InvalidInputDataBlock {
+                    name: name.clone(),
+                    reason: error.to_string(),
+                })?;
         }
 
         let mut required_table_keys: HashSet<String> = HashSet::new();
@@ -75,33 +108,34 @@ impl TestScenario {
         }
 
         let provided_table_keys: HashSet<String> = self.input.data.keys().cloned().collect();
-        let missing_tables: Vec<String> = required_table_keys
+        let mut missing_tables: Vec<String> = required_table_keys
             .difference(&provided_table_keys)
             .cloned()
             .collect();
+        missing_tables.sort();
         if !missing_tables.is_empty() {
-            bail!(
-                "input.data is missing required table data for: {:?}",
-                missing_tables
-            );
+            return Err(TestScenarioError::MissingRequiredTables {
+                tables: missing_tables,
+            });
         }
 
-        let unknown_tables: Vec<String> = provided_table_keys
+        let mut unknown_tables: Vec<String> = provided_table_keys
             .difference(&required_table_keys)
             .cloned()
             .collect();
+        unknown_tables.sort();
         if !unknown_tables.is_empty() {
-            bail!(
-                "input.data contains unknown table keys not present in dataset definition: {:?}",
-                unknown_tables
-            );
+            return Err(TestScenarioError::UnknownTableKeys {
+                tables: unknown_tables,
+            });
         }
 
         // Validate expected output DataBlock
-        self.expected_output
-            .data
-            .validate()
-            .context("expected_output.data")?;
+        self.expected_output.data.validate().map_err(|error| {
+            TestScenarioError::InvalidExpectedOutputDataBlock {
+                reason: error.to_string(),
+            }
+        })?;
 
         Ok(())
     }
@@ -129,14 +163,13 @@ pub struct PeriodDef {
 
 impl PeriodDef {
     /// Validate period constraints
-    pub fn validate(&self) -> Result<()> {
+    pub fn validate(&self) -> ValidationResult<()> {
         if self.start_date > self.end_date {
-            bail!(
-                "Period '{}': start_date ({}) must be before or equal to end_date ({})",
-                self.identifier,
-                self.start_date,
-                self.end_date
-            );
+            return Err(TestScenarioError::InvalidPeriodRange {
+                identifier: self.identifier.clone(),
+                start_date: self.start_date,
+                end_date: self.end_date,
+            });
         }
         Ok(())
     }
@@ -174,10 +207,10 @@ pub struct DataBlock {
 
 impl DataBlock {
     /// Validate that exactly one of rows or file is present
-    pub fn validate(&self) -> Result<()> {
+    pub fn validate(&self) -> ValidationResult<()> {
         match (&self.rows, &self.file) {
-            (Some(_), Some(_)) => bail!("DataBlock cannot have both rows and file"),
-            (None, None) => bail!("DataBlock must have either rows or file"),
+            (Some(_), Some(_)) => Err(TestScenarioError::DataBlockHasRowsAndFile),
+            (None, None) => Err(TestScenarioError::DataBlockMissingRowsAndFile),
             _ => Ok(()),
         }
     }

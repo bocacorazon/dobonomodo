@@ -7,6 +7,14 @@ use uuid::Uuid;
 
 type Result<T> = std::result::Result<T, InjectionError>;
 
+/// Derived temporal metadata values for system-column injection.
+#[derive(Debug, Clone, Default)]
+pub struct TemporalMetadataValues {
+    pub period: Option<String>,
+    pub period_from: Option<String>,
+    pub period_to: Option<String>,
+}
+
 /// Inject system metadata into rows
 pub fn inject_system_metadata(
     rows: Vec<HashMap<String, Value>>,
@@ -24,13 +32,30 @@ pub fn inject_system_metadata_for_mode(
     temporal_mode: Option<TemporalMode>,
     dataset_id: Uuid,
 ) -> Result<Vec<HashMap<String, Value>>> {
+    inject_system_metadata_for_mode_with_temporal_values(
+        rows,
+        table_name,
+        temporal_mode,
+        None,
+        dataset_id,
+    )
+}
+
+/// Inject system metadata into rows with optional derived temporal values.
+pub fn inject_system_metadata_for_mode_with_temporal_values(
+    rows: Vec<HashMap<String, Value>>,
+    table_name: &str,
+    temporal_mode: Option<TemporalMode>,
+    temporal_values: Option<&TemporalMetadataValues>,
+    dataset_id: Uuid,
+) -> Result<Vec<HashMap<String, Value>>> {
     let now = Utc::now();
     let now_str = now.to_rfc3339();
     let mut enriched = Vec::with_capacity(rows.len());
 
     for (row_index, mut row) in rows.into_iter().enumerate() {
         if let Some(mode) = temporal_mode.as_ref() {
-            validate_temporal_columns(&row, mode, row_index, table_name)?;
+            ensure_temporal_columns(&mut row, mode, temporal_values, row_index, table_name)?;
         }
 
         // System columns
@@ -56,41 +81,63 @@ pub fn inject_system_metadata_for_mode(
     Ok(enriched)
 }
 
-fn validate_temporal_columns(
-    row: &HashMap<String, Value>,
+fn ensure_temporal_columns(
+    row: &mut HashMap<String, Value>,
     temporal_mode: &TemporalMode,
+    temporal_values: Option<&TemporalMetadataValues>,
     row_index: usize,
     table_name: &str,
 ) -> Result<()> {
     match temporal_mode {
-        TemporalMode::Period => {
-            if !has_non_null_value(row, "_period") {
-                return Err(InjectionError::MissingTemporalColumn {
-                    table: table_name.to_string(),
-                    row_index,
-                    column: "_period",
-                });
-            }
-        }
+        TemporalMode::Period => ensure_temporal_value(
+            row,
+            "_period",
+            temporal_values.and_then(|values| values.period.as_deref()),
+            row_index,
+            table_name,
+        )?,
         TemporalMode::Bitemporal => {
-            if !has_non_null_value(row, "_period_from") {
-                return Err(InjectionError::MissingTemporalColumn {
-                    table: table_name.to_string(),
-                    row_index,
-                    column: "_period_from",
-                });
-            }
-            if !has_non_null_value(row, "_period_to") {
-                return Err(InjectionError::MissingTemporalColumn {
-                    table: table_name.to_string(),
-                    row_index,
-                    column: "_period_to",
-                });
-            }
+            ensure_temporal_value(
+                row,
+                "_period_from",
+                temporal_values.and_then(|values| values.period_from.as_deref()),
+                row_index,
+                table_name,
+            )?;
+            ensure_temporal_value(
+                row,
+                "_period_to",
+                temporal_values.and_then(|values| values.period_to.as_deref()),
+                row_index,
+                table_name,
+            )?;
         }
     }
 
     Ok(())
+}
+
+fn ensure_temporal_value(
+    row: &mut HashMap<String, Value>,
+    key: &'static str,
+    derived_value: Option<&str>,
+    row_index: usize,
+    table_name: &str,
+) -> Result<()> {
+    if has_non_null_value(row, key) {
+        return Ok(());
+    }
+
+    if let Some(value) = derived_value {
+        row.insert(key.to_string(), Value::String(value.to_string()));
+        return Ok(());
+    }
+
+    Err(InjectionError::MissingTemporalColumn {
+        table: table_name.to_string(),
+        row_index,
+        column: key,
+    })
 }
 
 fn has_non_null_value(row: &HashMap<String, Value>, key: &str) -> bool {
@@ -359,5 +406,56 @@ mod tests {
 
         let result = inject_system_metadata_for_mode(rows, "test_table", None, dataset_id);
         assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_inject_system_metadata_for_mode_injects_period_from_context() {
+        let dataset_id = Uuid::now_v7();
+        let rows = vec![HashMap::from([("id".to_string(), Value::Number(1.into()))])];
+        let temporal_values = TemporalMetadataValues {
+            period: Some("2026-01".to_string()),
+            period_from: None,
+            period_to: None,
+        };
+
+        let result = inject_system_metadata_for_mode_with_temporal_values(
+            rows,
+            "test_table",
+            Some(TemporalMode::Period),
+            Some(&temporal_values),
+            dataset_id,
+        )
+        .expect("temporal metadata injection should succeed");
+
+        assert_eq!(result[0]["_period"], Value::String("2026-01".to_string()));
+    }
+
+    #[test]
+    fn test_inject_system_metadata_for_mode_injects_bitemporal_range_from_context() {
+        let dataset_id = Uuid::now_v7();
+        let rows = vec![HashMap::from([("id".to_string(), Value::Number(1.into()))])];
+        let temporal_values = TemporalMetadataValues {
+            period: None,
+            period_from: Some("2026-01-01".to_string()),
+            period_to: Some("2026-01-31".to_string()),
+        };
+
+        let result = inject_system_metadata_for_mode_with_temporal_values(
+            rows,
+            "test_table",
+            Some(TemporalMode::Bitemporal),
+            Some(&temporal_values),
+            dataset_id,
+        )
+        .expect("bitemporal metadata injection should succeed");
+
+        assert_eq!(
+            result[0]["_period_from"],
+            Value::String("2026-01-01".to_string())
+        );
+        assert_eq!(
+            result[0]["_period_to"],
+            Value::String("2026-01-31".to_string())
+        );
     }
 }

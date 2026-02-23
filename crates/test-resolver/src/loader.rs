@@ -45,25 +45,41 @@ impl InMemoryDataLoader {
         // Build series for each column
         let mut series_vec = Vec::new();
         for col_name in &columns {
-            let inferred_type = rows.iter().enumerate().find_map(|(row_index, row)| {
-                row.get(col_name).and_then(|value| {
-                    if value.is_null() {
-                        None
-                    } else {
-                        Some((row_index, Self::infer_inline_type(value), value))
-                    }
-                })
-            });
+            let mut inferred_type: Option<InlineType> = None;
+            for (row_index, row) in rows.iter().enumerate() {
+                let Some(value) = row.get(col_name) else {
+                    continue;
+                };
+                if value.is_null() {
+                    continue;
+                }
 
-            let series = if let Some((row_index, inferred_type, inferred_value)) = inferred_type {
-                if inferred_type == InlineType::Unsupported {
+                let value_type = Self::infer_inline_type(value);
+                if value_type == InlineType::Unsupported {
                     return Err(LoaderError::InlineUnsupportedValueType {
                         row_index,
                         column: col_name.clone(),
-                        actual_type: Self::json_value_type_name(inferred_value),
+                        actual_type: Self::json_value_type_name(value),
                     });
                 }
 
+                inferred_type = match inferred_type {
+                    None => Some(value_type),
+                    Some(current) => match Self::merge_inline_types(current, value_type) {
+                        Some(merged) => Some(merged),
+                        None => {
+                            return Err(LoaderError::InlineValueTypeMismatch {
+                                row_index,
+                                column: col_name.clone(),
+                                expected_type: Self::inline_type_name(current),
+                                actual_type: Self::json_value_type_name(value),
+                            });
+                        }
+                    },
+                };
+            }
+
+            let series = if let Some(inferred_type) = inferred_type {
                 match inferred_type {
                     InlineType::Bool => {
                         let vals: std::result::Result<Vec<Option<bool>>, LoaderError> = rows
@@ -303,6 +319,29 @@ impl InMemoryDataLoader {
         }
     }
 
+    fn merge_inline_types(current: InlineType, incoming: InlineType) -> Option<InlineType> {
+        if current == incoming {
+            return Some(current);
+        }
+
+        match (current, incoming) {
+            (InlineType::Int64, InlineType::Float64) | (InlineType::Float64, InlineType::Int64) => {
+                Some(InlineType::Float64)
+            }
+            _ => None,
+        }
+    }
+
+    fn inline_type_name(value: InlineType) -> &'static str {
+        match value {
+            InlineType::Bool => "boolean",
+            InlineType::Int64 => "integer",
+            InlineType::Float64 => "number",
+            InlineType::String => "string",
+            InlineType::Unsupported => "unsupported",
+        }
+    }
+
     fn json_value_type_name(value: &serde_json::Value) -> &'static str {
         match value {
             serde_json::Value::Null => "null",
@@ -406,6 +445,21 @@ mod tests {
         };
         assert!(error.contains("Inline data type mismatch"));
         assert!(error.contains("column 'value'"));
+    }
+
+    #[test]
+    fn test_build_lazyframe_allows_mixed_integer_and_decimal_values() {
+        let rows = vec![
+            HashMap::from([("value".to_string(), json!(100))]),
+            HashMap::from([("value".to_string(), json!(200.5))]),
+        ];
+
+        let dataframe = InMemoryDataLoader::build_lazyframe(rows)
+            .unwrap()
+            .collect()
+            .unwrap();
+        let column = dataframe.column("value").unwrap().as_materialized_series();
+        assert_eq!(column.dtype(), &DataType::Float64);
     }
 
     #[test]

@@ -1,10 +1,12 @@
 use anyhow::{bail, Result};
+use chrono::DateTime;
 use dobo_core::model::{
     DataMismatch, MatchMode, MismatchType, TraceAssertion, TraceChangeType, TraceMismatch,
     TraceMismatchType,
 };
 use polars::prelude::*;
 use std::collections::{BTreeMap, HashMap};
+use uuid::Uuid;
 
 type Row = HashMap<String, serde_json::Value>;
 type Rows = Vec<Row>;
@@ -33,8 +35,18 @@ pub fn compare_output(
     ensure_matching_schema(&actual_clean, &expected_clean)?;
 
     match mode {
-        MatchMode::Exact => compare_exact(&actual_clean, &expected_clean, order_sensitive),
-        MatchMode::Subset => compare_subset(&actual_clean, &expected_clean, order_sensitive),
+        MatchMode::Exact => compare_exact(
+            &actual_clean,
+            &expected_clean,
+            order_sensitive,
+            validate_metadata,
+        ),
+        MatchMode::Subset => compare_subset(
+            &actual_clean,
+            &expected_clean,
+            order_sensitive,
+            validate_metadata,
+        ),
     }
 }
 
@@ -79,6 +91,7 @@ fn compare_exact(
     actual: &DataFrame,
     expected: &DataFrame,
     order_sensitive: bool,
+    validate_metadata: bool,
 ) -> Result<Vec<DataMismatch>> {
     let mut mismatches = Vec::new();
 
@@ -92,9 +105,10 @@ fn compare_exact(
         for idx in 0..max_len {
             match (actual_rows.get(idx), expected_rows.get(idx)) {
                 (Some(actual_row), Some(expected_row)) => {
-                    if !rows_equal(actual_row, expected_row) {
+                    if !rows_equal(expected_row, actual_row, validate_metadata) {
                         // Row values differ
-                        let differing_columns = find_differing_columns(expected_row, actual_row);
+                        let differing_columns =
+                            find_differing_columns(expected_row, actual_row, validate_metadata);
                         mismatches.push(DataMismatch {
                             mismatch_type: MismatchType::ValueMismatch,
                             expected: Some(expected_row.clone()),
@@ -126,12 +140,15 @@ fn compare_exact(
         }
     } else {
         // Order-insensitive exact comparison with multiplicity and value-diff pairing.
-        let (mut expected_unmatched, mut actual_unmatched) =
-            split_unmatched_rows(dataframe_to_rows(expected)?, dataframe_to_rows(actual)?);
+        let (mut expected_unmatched, mut actual_unmatched) = split_unmatched_rows(
+            dataframe_to_rows(expected)?,
+            dataframe_to_rows(actual)?,
+            validate_metadata,
+        );
 
         while !expected_unmatched.is_empty() && !actual_unmatched.is_empty() {
             let (expected_idx, actual_idx, differing_columns) =
-                best_value_mismatch_pair(&expected_unmatched, &actual_unmatched);
+                best_value_mismatch_pair(&expected_unmatched, &actual_unmatched, validate_metadata);
             let expected_row = expected_unmatched.swap_remove(expected_idx);
             let actual_row = actual_unmatched.swap_remove(actual_idx);
 
@@ -170,20 +187,30 @@ fn compare_subset(
     actual: &DataFrame,
     expected: &DataFrame,
     order_sensitive: bool,
+    validate_metadata: bool,
 ) -> Result<Vec<DataMismatch>> {
     let (mut expected_unmatched, mut actual_unmatched) = if order_sensitive {
         split_unmatched_rows_ordered_subset(
             dataframe_to_rows(expected)?,
             dataframe_to_rows(actual)?,
+            validate_metadata,
         )
     } else {
-        split_unmatched_rows(dataframe_to_rows(expected)?, dataframe_to_rows(actual)?)
+        split_unmatched_rows(
+            dataframe_to_rows(expected)?,
+            dataframe_to_rows(actual)?,
+            validate_metadata,
+        )
     };
 
     let mut mismatches = Vec::new();
 
     while let Some((expected_idx, actual_idx, differing_columns)) =
-        best_non_exact_value_mismatch_pair(&expected_unmatched, &actual_unmatched)
+        best_non_exact_value_mismatch_pair(
+            &expected_unmatched,
+            &actual_unmatched,
+            validate_metadata,
+        )
     {
         let expected_row = expected_unmatched.swap_remove(expected_idx);
         let actual_row = actual_unmatched.swap_remove(actual_idx);
@@ -208,7 +235,11 @@ fn compare_subset(
     Ok(mismatches)
 }
 
-fn split_unmatched_rows(left_rows: Rows, right_rows: Rows) -> (Rows, Rows) {
+fn split_unmatched_rows(
+    left_rows: Rows,
+    right_rows: Rows,
+    validate_metadata: bool,
+) -> (Rows, Rows) {
     let mut right_consumed = vec![false; right_rows.len()];
     let mut left_unmatched = Vec::new();
 
@@ -216,7 +247,9 @@ fn split_unmatched_rows(left_rows: Rows, right_rows: Rows) -> (Rows, Rows) {
         let matched_idx = right_rows
             .iter()
             .enumerate()
-            .find(|(idx, right_row)| !right_consumed[*idx] && rows_equal(&left_row, right_row))
+            .find(|(idx, right_row)| {
+                !right_consumed[*idx] && rows_equal(&left_row, right_row, validate_metadata)
+            })
             .map(|(idx, _)| idx);
 
         if let Some(idx) = matched_idx {
@@ -235,14 +268,18 @@ fn split_unmatched_rows(left_rows: Rows, right_rows: Rows) -> (Rows, Rows) {
     (left_unmatched, right_unmatched)
 }
 
-fn split_unmatched_rows_ordered_subset(expected_rows: Rows, actual_rows: Rows) -> (Rows, Rows) {
+fn split_unmatched_rows_ordered_subset(
+    expected_rows: Rows,
+    actual_rows: Rows,
+    validate_metadata: bool,
+) -> (Rows, Rows) {
     let mut actual_consumed = vec![false; actual_rows.len()];
     let mut expected_unmatched = Vec::new();
     let mut search_start = 0;
 
     for expected_row in expected_rows {
         let matched_idx = (search_start..actual_rows.len())
-            .find(|idx| rows_equal(&expected_row, &actual_rows[*idx]));
+            .find(|idx| rows_equal(&expected_row, &actual_rows[*idx], validate_metadata));
 
         if let Some(idx) = matched_idx {
             actual_consumed[idx] = true;
@@ -264,12 +301,14 @@ fn split_unmatched_rows_ordered_subset(expected_rows: Rows, actual_rows: Rows) -
 fn best_value_mismatch_pair(
     expected_rows: &[Row],
     actual_rows: &[Row],
+    validate_metadata: bool,
 ) -> (usize, usize, Vec<String>) {
     let mut best_pair: Option<(usize, usize, Vec<String>)> = None;
 
     for (expected_idx, expected_row) in expected_rows.iter().enumerate() {
         for (actual_idx, actual_row) in actual_rows.iter().enumerate() {
-            let differing_columns = find_differing_columns(expected_row, actual_row);
+            let differing_columns =
+                find_differing_columns(expected_row, actual_row, validate_metadata);
 
             match &best_pair {
                 Some((_, _, current_diff)) if current_diff.len() <= differing_columns.len() => {}
@@ -286,12 +325,14 @@ fn best_value_mismatch_pair(
 fn best_non_exact_value_mismatch_pair(
     expected_rows: &[Row],
     actual_rows: &[Row],
+    validate_metadata: bool,
 ) -> Option<(usize, usize, Vec<String>)> {
     let mut best_pair: Option<(usize, usize, Vec<String>)> = None;
 
     for (expected_idx, expected_row) in expected_rows.iter().enumerate() {
         for (actual_idx, actual_row) in actual_rows.iter().enumerate() {
-            let differing_columns = find_differing_columns(expected_row, actual_row);
+            let differing_columns =
+                find_differing_columns(expected_row, actual_row, validate_metadata);
             if differing_columns.is_empty() {
                 continue;
             }
@@ -355,7 +396,7 @@ fn column_value_at(col: &Column, idx: usize) -> serde_json::Value {
 }
 
 /// Compare two row HashMaps for equality
-fn rows_equal(a: &Row, b: &Row) -> bool {
+fn rows_equal(a: &Row, b: &Row, validate_metadata: bool) -> bool {
     if a.len() != b.len() {
         return false;
     }
@@ -363,8 +404,7 @@ fn rows_equal(a: &Row, b: &Row) -> bool {
     for (key, val_a) in a {
         match b.get(key) {
             Some(val_b) => {
-                // Special handling for floats (with tolerance)
-                if !values_equal(val_a, val_b) {
+                if !values_equal_for_column(key, val_a, val_b, validate_metadata) {
                     return false;
                 }
             }
@@ -373,6 +413,35 @@ fn rows_equal(a: &Row, b: &Row) -> bool {
     }
 
     true
+}
+
+fn values_equal_for_column(
+    column: &str,
+    expected: &serde_json::Value,
+    actual: &serde_json::Value,
+    validate_metadata: bool,
+) -> bool {
+    if validate_metadata && is_volatile_metadata_column(column) {
+        return volatile_metadata_value_is_valid(column, actual);
+    }
+
+    values_equal(expected, actual)
+}
+
+fn is_volatile_metadata_column(column: &str) -> bool {
+    matches!(column, "_row_id" | "_created_at" | "_updated_at")
+}
+
+fn volatile_metadata_value_is_valid(column: &str, value: &serde_json::Value) -> bool {
+    match (column, value) {
+        ("_row_id", serde_json::Value::String(raw)) => Uuid::parse_str(raw)
+            .map(|uuid| uuid.get_version_num() == 7)
+            .unwrap_or(false),
+        ("_created_at" | "_updated_at", serde_json::Value::String(raw)) => {
+            DateTime::parse_from_rfc3339(raw).is_ok()
+        }
+        _ => false,
+    }
 }
 
 /// Compare two JSON values for equality (with float tolerance)
@@ -390,12 +459,12 @@ fn values_equal(a: &serde_json::Value, b: &serde_json::Value) -> bool {
 }
 
 /// Find columns that differ between two rows
-fn find_differing_columns(expected: &Row, actual: &Row) -> Vec<String> {
+fn find_differing_columns(expected: &Row, actual: &Row, validate_metadata: bool) -> Vec<String> {
     let mut differing = Vec::new();
 
     for (key, expected_val) in expected {
         if let Some(actual_val) = actual.get(key) {
-            if !values_equal(expected_val, actual_val) {
+            if !values_equal_for_column(key, expected_val, actual_val, validate_metadata) {
                 differing.push(key.clone());
             }
         } else {
@@ -721,6 +790,56 @@ mod tests {
     }
 
     #[test]
+    fn metadata_validation_uses_semantics_for_volatile_columns() {
+        let actual = df! {
+            "id" => &[1i64],
+            "_row_id" => &["018f6f30-7a35-7000-8000-000000000001"],
+            "_created_at" => &["2026-01-01T00:00:00Z"],
+            "_updated_at" => &["2026-01-01T00:00:00Z"],
+            "_source_table" => &["orders"],
+            "_deleted" => &[false],
+        }
+        .unwrap();
+        let expected = df! {
+            "id" => &[1i64],
+            "_row_id" => &["any-value-is-accepted-for-expected"],
+            "_created_at" => &["placeholder"],
+            "_updated_at" => &["placeholder"],
+            "_source_table" => &["orders"],
+            "_deleted" => &[false],
+        }
+        .unwrap();
+
+        let mismatches = compare_output(&actual, &expected, MatchMode::Exact, true, true).unwrap();
+        assert!(mismatches.is_empty(), "{:?}", mismatches);
+    }
+
+    #[test]
+    fn metadata_validation_rejects_invalid_actual_volatile_values() {
+        let actual = df! {
+            "id" => &[1i64],
+            "_row_id" => &["not-a-uuid"],
+            "_created_at" => &["not-a-date"],
+            "_updated_at" => &["not-a-date"],
+        }
+        .unwrap();
+        let expected = df! {
+            "id" => &[1i64],
+            "_row_id" => &["placeholder"],
+            "_created_at" => &["placeholder"],
+            "_updated_at" => &["placeholder"],
+        }
+        .unwrap();
+
+        let mismatches = compare_output(&actual, &expected, MatchMode::Exact, true, true).unwrap();
+        assert_eq!(mismatches.len(), 1);
+        assert_eq!(mismatches[0].mismatch_type, MismatchType::ValueMismatch);
+        assert!(mismatches[0]
+            .differing_columns
+            .contains(&"_row_id".to_string()));
+    }
+
+    #[test]
     fn trace_validation_detects_extra_events() {
         let actual_trace = vec![json!({
             "operation_order": 4,
@@ -732,5 +851,68 @@ mod tests {
         assert_eq!(mismatches.len(), 1);
         assert_eq!(mismatches[0].mismatch_type, TraceMismatchType::ExtraEvent);
         assert_eq!(mismatches[0].operation_order, 4);
+    }
+
+    #[test]
+    fn trace_validation_detects_missing_event_by_operation_and_change_type() {
+        let assertions = vec![TraceAssertion {
+            operation_order: 2,
+            change_type: TraceChangeType::Deleted,
+            row_match: HashMap::from([("id".to_string(), json!(1))]),
+            expected_diff: None,
+        }];
+
+        let mismatches = validate_trace_events(&[], &assertions).unwrap();
+        assert_eq!(mismatches.len(), 1);
+        assert_eq!(mismatches[0].mismatch_type, TraceMismatchType::MissingEvent);
+        assert_eq!(mismatches[0].operation_order, 2);
+    }
+
+    #[test]
+    fn trace_validation_reports_row_match_mismatch_as_diff_mismatch() {
+        let actual_trace = vec![json!({
+            "operation_order": 1,
+            "change_type": "created",
+            "after": {"id": 999, "value": 10}
+        })];
+        let assertions = vec![TraceAssertion {
+            operation_order: 1,
+            change_type: TraceChangeType::Created,
+            row_match: HashMap::from([("id".to_string(), json!(1))]),
+            expected_diff: None,
+        }];
+
+        let mismatches = validate_trace_events(&actual_trace, &assertions).unwrap();
+        assert_eq!(mismatches.len(), 1);
+        assert_eq!(mismatches[0].mismatch_type, TraceMismatchType::DiffMismatch);
+    }
+
+    #[test]
+    fn trace_validation_expected_diff_for_updated_event_passes_and_fails() {
+        let passing_trace = vec![json!({
+            "operation_order": 3,
+            "change_type": "updated",
+            "after": {"id": 1, "value": 20},
+            "diff": {"value": 20}
+        })];
+        let assertion = TraceAssertion {
+            operation_order: 3,
+            change_type: TraceChangeType::Updated,
+            row_match: HashMap::from([("id".to_string(), json!(1))]),
+            expected_diff: Some(HashMap::from([("value".to_string(), json!(20))])),
+        };
+
+        let pass_mismatches = validate_trace_events(&passing_trace, &[assertion.clone()]).unwrap();
+        assert!(pass_mismatches.is_empty());
+
+        let failing_trace = vec![json!({
+            "operation_order": 3,
+            "change_type": "updated",
+            "after": {"id": 1, "value": 99},
+            "diff": {"value": 99}
+        })];
+        let fail_mismatches = validate_trace_events(&failing_trace, &[assertion]).unwrap();
+        assert_eq!(fail_mismatches.len(), 1);
+        assert_eq!(fail_mismatches[0].mismatch_type, TraceMismatchType::DiffMismatch);
     }
 }

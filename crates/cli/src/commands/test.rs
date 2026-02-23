@@ -563,4 +563,29 @@ config:
         let exit_code = command.execute().unwrap();
         assert_eq!(exit_code, 1);
     }
+
+        #[test]
+        fn execute_single_with_date_and_timestamp_columns_parses_and_executes() {
+                let temp_dir = tempdir().unwrap();
+                let scenario_path = temp_dir.path().join("temporal-types.yaml");
+                let workspace_root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+                        .join("..")
+                        .join("..");
+                let source_fixture = workspace_root.join("tests/scenarios/temporal-types-single.yaml");
+                fs::copy(source_fixture, &scenario_path).unwrap();
+
+                let parsed = parse_scenario(&scenario_path);
+                assert!(parsed.is_ok());
+
+                let command = TestCommand {
+                        scenario_path: Some(scenario_path),
+                        suite: None,
+                        verbose: false,
+                        no_snapshot: true,
+                        output: "human".to_string(),
+                };
+
+                let exit_code = command.execute().unwrap();
+                assert_eq!(exit_code, 2);
+        }
 }

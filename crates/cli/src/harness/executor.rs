@@ -3,8 +3,8 @@ use chrono::Utc;
 use dobo_core::engine::io_traits::DataLoader;
 use dobo_core::model::metadata_store::MetadataStore;
 use dobo_core::model::{
-    DataBlock, Dataset, ErrorType, LookupTarget, Project, ProjectDef, TableRef, TemporalMode,
-    TestErrorDetail, TestResult, TestScenario, TestStatus,
+    DataBlock, Dataset, ErrorType, LookupTarget, PeriodDef, Project, ProjectDef, TableRef,
+    TemporalMode, TestErrorDetail, TestResult, TestScenario, TestStatus,
 };
 use dobo_core::trace::trace_writer::TraceWriter;
 use polars::prelude::*;
@@ -12,7 +12,8 @@ use std::collections::HashMap;
 use std::path::{Component, Path, PathBuf};
 use test_resolver::errors::{InjectionError, LoaderError};
 use test_resolver::{
-    inject_system_metadata_for_mode, InMemoryDataLoader, InMemoryMetadataStore, InMemoryTraceWriter,
+    inject_system_metadata_for_mode_with_temporal_values, InMemoryDataLoader,
+    InMemoryMetadataStore, InMemoryTraceWriter, TemporalMetadataValues,
 };
 use uuid::Uuid;
 use walkdir::WalkDir;
@@ -20,6 +21,7 @@ use walkdir::WalkDir;
 use super::comparator::{compare_output, validate_trace_events};
 
 const PROJECT_FIXTURE_FILE: &str = "projects.yaml";
+const RESERVED_SCENARIO_FILENAMES: &[&str] = &[PROJECT_FIXTURE_FILE];
 
 /// Execute a single test scenario
 #[allow(dead_code)]
@@ -84,6 +86,7 @@ fn execute_scenario_with_base_dir_and_store(
             table_name,
             &scenario.input.dataset,
             scenario_base_dir,
+            scenario.periods.first(),
             true,
         ) {
             Ok(Some(frame)) => {
@@ -134,7 +137,7 @@ fn execute_scenario_with_base_dir_and_store(
         Err(e) => {
             result.status = TestStatus::Error;
             result.error = Some(TestErrorDetail {
-                error_type: ErrorType::ExecutionError,
+                error_type: classify_execution_error(&e),
                 message: e.to_string(),
                 details: Some(format!("{:?}", e)),
             });
@@ -148,6 +151,7 @@ fn execute_scenario_with_base_dir_and_store(
         "output",
         &scenario.input.dataset,
         scenario_base_dir,
+        None,
         false,
     ) {
         Ok(Some(frame)) => match frame.collect() {
@@ -240,6 +244,13 @@ fn execute_scenario_with_base_dir_and_store(
         }
     }
 
+    if result.status == TestStatus::Fail
+        && scenario.config.snapshot_on_failure
+        && result.actual_snapshot.is_none()
+    {
+        result.actual_snapshot = Some(dataframe_to_datablock(&actual_df)?);
+    }
+
     Ok(result)
 }
 
@@ -249,16 +260,19 @@ fn load_data_block(
     table_name: &str,
     dataset: &Dataset,
     scenario_base_dir: Option<&Path>,
+    period: Option<&PeriodDef>,
     inject_metadata: bool,
 ) -> Result<Option<LazyFrame>> {
     let temporal_mode = table_temporal_mode(dataset, table_name);
+    let temporal_values = temporal_values_from_period(period);
 
     if let Some(rows) = &block.rows {
         let frame = if inject_metadata {
-            let enriched_rows = inject_system_metadata_for_mode(
+            let enriched_rows = inject_system_metadata_for_mode_with_temporal_values(
                 rows.clone(),
                 table_name,
                 temporal_mode,
+                temporal_values.as_ref(),
                 dataset.id,
             )?;
             InMemoryDataLoader::build_lazyframe(enriched_rows)?
@@ -294,6 +308,7 @@ fn load_data_block(
                 frame,
                 table_name,
                 temporal_mode,
+                temporal_values.as_ref(),
                 dataset.id.to_string(),
             )?))
         } else {
@@ -304,10 +319,21 @@ fn load_data_block(
     }
 }
 
+fn temporal_values_from_period(period: Option<&PeriodDef>) -> Option<TemporalMetadataValues> {
+    period.map(|period| TemporalMetadataValues {
+        period: Some(period.identifier.clone()),
+        period_from: Some(period.start_date.to_string()),
+        period_to: Some(period.end_date.to_string()),
+    })
+}
+
 fn resolve_data_file_path(file_path: &str, scenario_base_dir: Option<&Path>) -> Result<PathBuf> {
     let path = PathBuf::from(file_path);
     let Some(base_dir) = scenario_base_dir else {
-        return Ok(path);
+        bail!(
+            "File-backed data blocks require a scenario base directory for sandboxed path resolution: '{}'",
+            file_path
+        );
     };
 
     if path.is_absolute() {
@@ -417,11 +443,14 @@ fn inject_file_metadata_lazy(
     frame: LazyFrame,
     table_name: &str,
     temporal_mode: Option<TemporalMode>,
+    temporal_values: Option<&TemporalMetadataValues>,
     dataset_id: String,
 ) -> Result<LazyFrame> {
-    if let Some(mode) = temporal_mode {
-        validate_file_temporal_columns(&frame, table_name, &mode)?;
-    }
+    let frame = if let Some(mode) = temporal_mode.as_ref() {
+        validate_file_temporal_columns(frame, table_name, mode, temporal_values)?
+    } else {
+        frame
+    };
 
     let now = Utc::now().to_rfc3339();
     let source_table = table_name.to_string();
@@ -460,10 +489,11 @@ fn inject_file_metadata_lazy(
 }
 
 fn validate_file_temporal_columns(
-    frame: &LazyFrame,
+    frame: LazyFrame,
     table_name: &str,
     temporal_mode: &TemporalMode,
-) -> Result<()> {
+    temporal_values: Option<&TemporalMetadataValues>,
+) -> Result<LazyFrame> {
     let schema = frame
         .clone()
         .collect_schema()
@@ -474,8 +504,26 @@ fn validate_file_temporal_columns(
         TemporalMode::Bitemporal => &["_period_from", "_period_to"],
     };
 
+    let mut temporal_columns = Vec::new();
     for required in required_columns {
-        if schema.get(required).is_none() {
+        let derived_value = match *required {
+            "_period" => temporal_values.and_then(|values| values.period.as_deref()),
+            "_period_from" => temporal_values.and_then(|values| values.period_from.as_deref()),
+            "_period_to" => temporal_values.and_then(|values| values.period_to.as_deref()),
+            _ => None,
+        };
+
+        if schema.get(required).is_some() {
+            if let Some(value) = derived_value {
+                temporal_columns.push(
+                    col(*required)
+                        .fill_null(lit(value.to_string()))
+                        .alias(*required),
+                );
+            }
+        } else if let Some(value) = derived_value {
+            temporal_columns.push(lit(value.to_string()).alias(*required));
+        } else {
             bail!(
                 "Table '{}' is missing required temporal column '{}'",
                 table_name,
@@ -484,62 +532,11 @@ fn validate_file_temporal_columns(
         }
     }
 
-    let temporal_values = frame
-        .clone()
-        .select(
-            required_columns
-                .iter()
-                .map(|column| col(*column))
-                .collect::<Vec<_>>(),
-        )
-        .collect()
-        .with_context(|| format!("Table '{}' temporal values could not be read", table_name))?;
-
-    for required in required_columns {
-        let series = temporal_values
-            .column(required)
-            .with_context(|| {
-                format!(
-                    "Table '{}' temporal column '{}' could not be accessed",
-                    table_name, required
-                )
-            })?
-            .as_materialized_series();
-
-        for row_idx in 0..series.len() {
-            let value = series.get(row_idx).with_context(|| {
-                format!(
-                    "Table '{}' temporal column '{}' row {} could not be read",
-                    table_name,
-                    required,
-                    row_idx + 1
-                )
-            })?;
-            if matches!(value, AnyValue::Null) {
-                bail!(
-                    "Table '{}' has missing required temporal value in column '{}' at row {}",
-                    table_name,
-                    required,
-                    row_idx + 1
-                );
-            }
-        }
-
-        if let Ok(strings) = series.str() {
-            for (row_idx, value) in strings.into_iter().enumerate() {
-                if value.is_some_and(|text| text.trim().is_empty()) {
-                    bail!(
-                        "Table '{}' has missing required temporal value in column '{}' at row {}",
-                        table_name,
-                        required,
-                        row_idx + 1
-                    );
-                }
-            }
-        }
+    if temporal_columns.is_empty() {
+        Ok(frame)
+    } else {
+        Ok(frame.with_columns(temporal_columns))
     }
-
-    Ok(())
 }
 
 /// Passthrough mock pipeline execution
@@ -686,6 +683,35 @@ fn classify_data_block_error(error: &anyhow::Error) -> ErrorType {
     ErrorType::ExecutionError
 }
 
+fn classify_execution_error(error: &anyhow::Error) -> ErrorType {
+    if let Some(loader_error) = error.downcast_ref::<LoaderError>() {
+        return match loader_error {
+            LoaderError::TableNotFound { .. }
+            | LoaderError::DataFrameBuild { .. }
+            | LoaderError::SchemaInspection { .. }
+            | LoaderError::MissingColumns { .. }
+            | LoaderError::UnexpectedColumns { .. }
+            | LoaderError::TypeMismatch { .. }
+            | LoaderError::InlineValueTypeMismatch { .. }
+            | LoaderError::InlineUnsupportedValueType { .. } => ErrorType::SchemaValidationError,
+            LoaderError::CsvLoad { .. } | LoaderError::ParquetLoad { .. } => {
+                ErrorType::ExecutionError
+            }
+        };
+    }
+
+    let message = error.to_string().to_ascii_lowercase();
+    if message.contains("cast")
+        || message.contains("strict")
+        || message.contains("schema")
+        || message.contains("conversion")
+    {
+        return ErrorType::SchemaValidationError;
+    }
+
+    ErrorType::ExecutionError
+}
+
 /// Extract value from column at specific index
 fn column_value_at(col: &Column, idx: usize) -> serde_json::Value {
     let series = col.as_materialized_series();
@@ -730,6 +756,13 @@ pub fn discover_scenarios(suite_path: &Path) -> Result<Vec<PathBuf>> {
         let path = entry.path();
         if let Some(ext) = path.extension() {
             if ext == "yaml" || ext == "yml" {
+                let is_reserved = path
+                    .file_name()
+                    .and_then(|name| name.to_str())
+                    .is_some_and(|name| RESERVED_SCENARIO_FILENAMES.contains(&name));
+                if is_reserved {
+                    continue;
+                }
                 scenarios.push(path.to_path_buf());
             }
         }
@@ -947,6 +980,15 @@ mod tests {
         }
     }
 
+    fn sample_period() -> dobo_core::model::PeriodDef {
+        dobo_core::model::PeriodDef {
+            identifier: "2026-01".to_string(),
+            level: "month".to_string(),
+            start_date: chrono::NaiveDate::from_ymd_opt(2026, 1, 1).unwrap(),
+            end_date: chrono::NaiveDate::from_ymd_opt(2026, 1, 31).unwrap(),
+        }
+    }
+
     #[test]
     fn resolves_data_file_relative_to_scenario_directory() {
         let temp = TempDir::new().unwrap();
@@ -961,7 +1003,7 @@ mod tests {
             file: Some("input.csv".to_string()),
         };
 
-        let frame = load_data_block(&block, "orders", &dataset, Some(temp.path()), false)
+        let frame = load_data_block(&block, "orders", &dataset, Some(temp.path()), None, false)
             .unwrap()
             .unwrap()
             .collect()
@@ -983,7 +1025,8 @@ mod tests {
             file: Some("input.csv".to_string()),
         };
 
-        let error = match load_data_block(&block, "orders", &dataset, Some(temp.path()), true) {
+        let error = match load_data_block(&block, "orders", &dataset, Some(temp.path()), None, true)
+        {
             Ok(_) => panic!("expected missing temporal column error"),
             Err(error) => error.to_string(),
         };
@@ -1005,7 +1048,7 @@ mod tests {
             file: Some("input.csv".to_string()),
         };
 
-        let frame = load_data_block(&block, "orders", &dataset, Some(temp.path()), true)
+        let frame = load_data_block(&block, "orders", &dataset, Some(temp.path()), None, true)
             .unwrap()
             .unwrap()
             .collect()
@@ -1104,7 +1147,26 @@ mod tests {
     }
 
     #[test]
-    fn missing_temporal_input_is_classified_as_schema_validation_error() {
+    fn trace_mismatch_populates_failure_snapshot_when_enabled() {
+        let dataset = sample_dataset();
+        let mut scenario = sample_scenario(dataset);
+        scenario.config.validate_traceability = true;
+        scenario.expected_trace = vec![dobo_core::model::TraceAssertion {
+            operation_order: 1,
+            change_type: dobo_core::model::TraceChangeType::Created,
+            row_match: HashMap::from([("id".to_string(), json!(999))]),
+            expected_diff: None,
+        }];
+
+        let result = execute_scenario_with_base_dir(&scenario, None).unwrap();
+        assert_eq!(result.status, TestStatus::Fail);
+        assert!(result.data_mismatches.is_empty());
+        assert!(!result.trace_mismatches.is_empty());
+        assert!(result.actual_snapshot.is_some());
+    }
+
+    #[test]
+    fn missing_temporal_input_rows_are_injected_from_scenario_period() {
         let mut scenario = sample_scenario(sample_dataset());
         scenario.input.data = HashMap::from([(
             "orders".to_string(),
@@ -1118,15 +1180,13 @@ mod tests {
         )]);
 
         let result = execute_scenario_with_base_dir(&scenario, None).unwrap();
-        assert_eq!(result.status, TestStatus::Error);
-        assert_eq!(
-            result.error.as_ref().map(|error| error.error_type),
-            Some(ErrorType::SchemaValidationError)
-        );
+        assert_eq!(result.status, TestStatus::Pass);
+        assert!(result.error.is_none());
     }
 
     #[test]
     fn missing_input_file_is_classified_as_file_not_found() {
+        let temp = TempDir::new().unwrap();
         let dataset = sample_dataset();
         let mut scenario = sample_scenario(dataset.clone());
         scenario.input.data = HashMap::from([(
@@ -1137,11 +1197,59 @@ mod tests {
             },
         )]);
 
-        let result = execute_scenario_with_base_dir(&scenario, None).unwrap();
+        let result = execute_scenario_with_base_dir(&scenario, Some(temp.path())).unwrap();
         assert_eq!(result.status, TestStatus::Error);
         assert_eq!(
             result.error.as_ref().map(|error| error.error_type),
             Some(ErrorType::FileNotFound)
+        );
+    }
+
+    #[test]
+    fn execute_scenario_rejects_file_backed_data_without_base_dir() {
+        let dataset = sample_dataset();
+        let mut scenario = sample_scenario(dataset.clone());
+        scenario.input.data = HashMap::from([(
+            "orders".to_string(),
+            DataBlock {
+                rows: None,
+                file: Some("orders.csv".to_string()),
+            },
+        )]);
+
+        let result = execute_scenario(&scenario).unwrap();
+        assert_eq!(result.status, TestStatus::Error);
+        assert_eq!(
+            result.error.as_ref().map(|error| error.error_type),
+            Some(ErrorType::ExecutionError)
+        );
+        assert!(result
+            .error
+            .as_ref()
+            .map(|error| error.message.contains("require a scenario base directory"))
+            .unwrap_or(false));
+    }
+
+    #[test]
+    fn file_input_cast_failure_is_classified_as_schema_validation_error() {
+        let temp = TempDir::new().unwrap();
+        fs::write(temp.path().join("orders.csv"), "id,value,_period\nabc,10,2026-01\n").unwrap();
+
+        let dataset = sample_dataset();
+        let mut scenario = sample_scenario(dataset.clone());
+        scenario.input.data = HashMap::from([(
+            "orders".to_string(),
+            DataBlock {
+                rows: None,
+                file: Some("orders.csv".to_string()),
+            },
+        )]);
+
+        let result = execute_scenario_with_base_dir(&scenario, Some(temp.path())).unwrap();
+        assert_eq!(result.status, TestStatus::Error);
+        assert_eq!(
+            result.error.as_ref().map(|error| error.error_type),
+            Some(ErrorType::SchemaValidationError)
         );
     }
 
@@ -1249,7 +1357,7 @@ mod tests {
             file: None,
         };
 
-        let frame = load_data_block(&block, "products", &dataset, None, true)
+        let frame = load_data_block(&block, "products", &dataset, None, None, true)
             .unwrap()
             .unwrap()
             .collect()
@@ -1265,7 +1373,7 @@ mod tests {
     }
 
     #[test]
-    fn rejects_file_input_with_missing_temporal_values_in_csv() {
+    fn file_input_with_missing_temporal_values_in_csv_is_backfilled_from_period_context() {
         let temp = TempDir::new().unwrap();
         let file_path = temp.path().join("input.csv");
         let mut file = fs::File::create(&file_path).unwrap();
@@ -1277,17 +1385,25 @@ mod tests {
             rows: None,
             file: Some("input.csv".to_string()),
         };
+        let period = sample_period();
 
-        let error = match load_data_block(&block, "orders", &dataset, Some(temp.path()), true) {
-            Ok(_) => panic!("expected missing temporal value error"),
-            Err(error) => error.to_string(),
-        };
-        assert!(error.contains("missing required temporal value"));
-        assert!(error.contains("_period"));
+        let frame = load_data_block(
+            &block,
+            "orders",
+            &dataset,
+            Some(temp.path()),
+            Some(&period),
+            true,
+        )
+        .unwrap()
+        .unwrap()
+        .collect()
+        .unwrap();
+        assert_eq!(frame.column("_period").unwrap().null_count(), 0);
     }
 
     #[test]
-    fn rejects_parquet_input_with_missing_temporal_values() {
+    fn parquet_input_with_missing_temporal_values_is_backfilled_from_period_context() {
         let temp = TempDir::new().unwrap();
         let file_path = temp.path().join("input.parquet");
 
@@ -1307,13 +1423,21 @@ mod tests {
             rows: None,
             file: Some("input.parquet".to_string()),
         };
+        let period = sample_period();
 
-        let error = match load_data_block(&block, "orders", &dataset, Some(temp.path()), true) {
-            Ok(_) => panic!("expected missing temporal value error"),
-            Err(error) => error.to_string(),
-        };
-        assert!(error.contains("missing required temporal value"));
-        assert!(error.contains("_period"));
+        let frame = load_data_block(
+            &block,
+            "orders",
+            &dataset,
+            Some(temp.path()),
+            Some(&period),
+            true,
+        )
+        .unwrap()
+        .unwrap()
+        .collect()
+        .unwrap();
+        assert_eq!(frame.column("_period").unwrap().null_count(), 0);
     }
 
     #[test]
@@ -1330,10 +1454,11 @@ mod tests {
             file: Some("../outside.csv".to_string()),
         };
 
-        let error = match load_data_block(&block, "orders", &dataset, Some(&scenario_dir), false) {
-            Ok(_) => panic!("expected path traversal to be rejected"),
-            Err(error) => error.to_string(),
-        };
+        let error =
+            match load_data_block(&block, "orders", &dataset, Some(&scenario_dir), None, false) {
+                Ok(_) => panic!("expected path traversal to be rejected"),
+                Err(error) => error.to_string(),
+            };
         assert!(error.contains("must stay under scenario directory"));
     }
 
@@ -1351,10 +1476,11 @@ mod tests {
             file: Some(outside_file.display().to_string()),
         };
 
-        let error = match load_data_block(&block, "orders", &dataset, Some(&scenario_dir), false) {
-            Ok(_) => panic!("expected absolute path to be rejected"),
-            Err(error) => error.to_string(),
-        };
+        let error =
+            match load_data_block(&block, "orders", &dataset, Some(&scenario_dir), None, false) {
+                Ok(_) => panic!("expected absolute path to be rejected"),
+                Err(error) => error.to_string(),
+            };
         assert!(error.contains("must be relative to the scenario directory"));
     }
 
@@ -1376,6 +1502,22 @@ mod tests {
         assert_eq!(
             scenarios[0].file_name().and_then(|name| name.to_str()),
             Some("valid.yaml")
+        );
+    }
+
+    #[test]
+    fn discover_scenarios_ignores_projects_fixture() {
+        let temp = TempDir::new().unwrap();
+        let suite_dir = temp.path().join("suite");
+        fs::create_dir_all(&suite_dir).unwrap();
+        fs::write(suite_dir.join("scenario.yaml"), "name: valid").unwrap();
+        fs::write(suite_dir.join(PROJECT_FIXTURE_FILE), "- id: fixture").unwrap();
+
+        let scenarios = discover_scenarios(&suite_dir).unwrap();
+        assert_eq!(scenarios.len(), 1);
+        assert_eq!(
+            scenarios[0].file_name().and_then(|name| name.to_str()),
+            Some("scenario.yaml")
         );
     }
 }
