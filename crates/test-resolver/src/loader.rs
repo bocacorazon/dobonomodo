@@ -1,6 +1,5 @@
 use crate::errors::LoaderError;
-use anyhow::Result;
-use dobo_core::engine::io_traits::DataLoader;
+use dobo_core::engine::io_traits::{DataLoader, DataLoaderError};
 use dobo_core::model::{ColumnType, ResolvedLocation, TableRef};
 use polars::prelude::*;
 use std::collections::{HashMap, HashSet};
@@ -376,10 +375,24 @@ impl Default for InMemoryDataLoader {
 }
 
 impl DataLoader for InMemoryDataLoader {
-    fn load(&self, location: &ResolvedLocation, schema: &TableRef) -> Result<LazyFrame> {
-        let table_name = location.table.as_deref().unwrap_or("unknown");
-        let frame = self.load_table(table_name)?;
-        Self::enforce_schema(frame, schema).map_err(Into::into)
+    fn load(
+        &self,
+        location: &ResolvedLocation,
+        schema: &TableRef,
+    ) -> std::result::Result<LazyFrame, DataLoaderError> {
+        let table_name = location
+            .table
+            .as_deref()
+            .or((!schema.name.is_empty()).then_some(schema.name.as_str()))
+            .unwrap_or("unknown");
+        let frame = self
+            .load_table(table_name)
+            .map_err(|error| DataLoaderError::LoadFailed {
+                message: error.to_string(),
+            })?;
+        Self::enforce_schema(frame, schema).map_err(|error| DataLoaderError::LoadFailed {
+            message: error.to_string(),
+        })
     }
 }
 
@@ -499,6 +512,7 @@ mod tests {
             table: Some("test_table".to_string()),
             schema: None,
             period_identifier: None,
+            catalog_response: None,
         };
 
         let table_ref = TableRef {
@@ -512,6 +526,28 @@ mod tests {
     }
 
     #[test]
+    fn test_in_memory_loader_falls_back_to_schema_name_when_location_table_missing() {
+        let mut loader = InMemoryDataLoader::new();
+        let rows = vec![HashMap::from([("id".to_string(), json!(1))])];
+        let frame = InMemoryDataLoader::build_lazyframe(rows).unwrap();
+        loader.add_table("orders".to_string(), frame);
+
+        let location = ResolvedLocation {
+            datasource_id: "test".to_string(),
+            path: None,
+            table: None,
+            schema: None,
+            period_identifier: None,
+            catalog_response: None,
+        };
+
+        let schema = table_ref("orders", vec![("id", ColumnType::Integer)]);
+
+        let result = loader.load(&location, &schema);
+        assert!(result.is_ok());
+    }
+
+    #[test]
     fn test_in_memory_loader_missing_table() {
         let loader = InMemoryDataLoader::new();
 
@@ -521,6 +557,7 @@ mod tests {
             table: Some("missing_table".to_string()),
             schema: None,
             period_identifier: None,
+            catalog_response: None,
         };
 
         let table_ref = TableRef {
@@ -565,6 +602,7 @@ mod tests {
             table: Some("orders".to_string()),
             schema: None,
             period_identifier: None,
+            catalog_response: None,
         };
 
         let result = loader.load(
@@ -599,6 +637,7 @@ mod tests {
             table: Some("orders".to_string()),
             schema: None,
             period_identifier: None,
+            catalog_response: None,
         };
 
         let result = loader.load(
@@ -627,6 +666,7 @@ mod tests {
             table: Some("orders".to_string()),
             schema: None,
             period_identifier: None,
+            catalog_response: None,
         };
 
         let frame = loader
@@ -656,6 +696,7 @@ mod tests {
             table: Some("orders".to_string()),
             schema: None,
             period_identifier: None,
+            catalog_response: None,
         };
 
         let frame = loader
@@ -668,6 +709,51 @@ mod tests {
         let collected = frame.collect().expect("collect should succeed");
         assert_eq!(collected.height(), 1);
         assert_eq!(collected.column("id").unwrap().dtype(), &DataType::Int64);
+    }
+
+    #[test]
+    fn test_in_memory_loader_casts_date_and_timestamp_columns() {
+        let mut loader = InMemoryDataLoader::new();
+        let rows = vec![HashMap::from([
+            ("id".to_string(), json!(1)),
+            ("order_date".to_string(), json!("2026-01-15")),
+            (
+                "captured_at".to_string(),
+                json!("2026-01-15T10:30:00"),
+            ),
+        ])];
+        let frame = InMemoryDataLoader::build_lazyframe(rows).unwrap();
+        loader.add_table("orders".to_string(), frame);
+
+        let location = ResolvedLocation {
+            datasource_id: "test".to_string(),
+            path: None,
+            table: Some("orders".to_string()),
+            schema: None,
+            period_identifier: None,
+            catalog_response: None,
+        };
+
+        let frame = loader
+            .load(
+                &location,
+                &table_ref(
+                    "orders",
+                    vec![
+                        ("id", ColumnType::Integer),
+                        ("order_date", ColumnType::Date),
+                        ("captured_at", ColumnType::Timestamp),
+                    ],
+                ),
+            )
+            .expect("load should succeed lazily");
+
+        let collected = frame.collect().expect("collect should succeed");
+        assert_eq!(collected.column("order_date").unwrap().dtype(), &DataType::Date);
+        assert_eq!(
+            collected.column("captured_at").unwrap().dtype(),
+            &DataType::Datetime(TimeUnit::Milliseconds, None)
+        );
     }
 
     #[test]
@@ -686,6 +772,7 @@ mod tests {
             table: Some("orders".to_string()),
             schema: None,
             period_identifier: None,
+            catalog_response: None,
         };
 
         let result = loader.load(

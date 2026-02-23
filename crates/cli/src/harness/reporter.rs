@@ -276,16 +276,17 @@ pub fn report_suite_result_junit<W: Write>(
                     .as_ref()
                     .map(|e| e.message.clone())
                     .unwrap_or_else(|| "Unknown error".to_string());
+                let error_type = result
+                    .error
+                    .as_ref()
+                    .map(|e| format!("{:?}", e.error_type))
+                    .unwrap_or_else(|| "UnknownError".to_string());
 
                 writeln!(
                     writer,
-                    "      <error message=\"{}\" type=\"{:?}\">",
+                    "      <error message=\"{}\" type=\"{}\">",
                     xml_escape(&error_message),
-                    result
-                        .error
-                        .as_ref()
-                        .map(|e| format!("{:?}", e.error_type))
-                        .unwrap_or_else(|| "UnknownError".to_string())
+                    xml_escape(&error_type)
                 )?;
                 writeln!(writer, "{}", xml_escape(&error_message))?;
                 writeln!(writer, "      </error>")?;
@@ -338,7 +339,7 @@ fn sanitize_snapshot_name(name: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use dobo_core::model::{DataBlock, TestResult};
+    use dobo_core::model::{DataBlock, ErrorType, SuiteResult, TestErrorDetail, TestResult};
     use std::collections::HashMap;
     use tempfile::TempDir;
 
@@ -378,5 +379,39 @@ mod tests {
         assert_eq!(non_verbose_mismatch_remaining(8, 4, false), Some(3));
         assert_eq!(non_verbose_mismatch_remaining(5, 4, false), None);
         assert_eq!(non_verbose_mismatch_remaining(8, 4, true), None);
+    }
+
+    #[test]
+    fn junit_error_type_attribute_uses_escaped_plain_string() {
+        let suite_result = SuiteResult {
+            total: 1,
+            passed: 0,
+            failed: 0,
+            errors: 1,
+            results: vec![TestResult {
+                scenario_name: "xml error case".to_string(),
+                status: TestStatus::Error,
+                warnings: vec![],
+                data_mismatches: vec![],
+                trace_mismatches: vec![],
+                error: Some(TestErrorDetail {
+                    error_type: ErrorType::ParseError,
+                    message: "bad <xml> & \"quotes\"".to_string(),
+                    details: None,
+                }),
+                actual_snapshot: None,
+            }],
+        };
+
+        let mut output = Vec::new();
+        report_suite_result_junit(&suite_result, &mut output).unwrap();
+        let xml = String::from_utf8(output).unwrap();
+
+        assert!(xml.contains("type=\"ParseError\""), "{xml}");
+        assert!(!xml.contains("type=\"\"ParseError\"\""), "{xml}");
+        assert!(
+            xml.contains("message=\"bad &lt;xml&gt; &amp; &quot;quotes&quot;\""),
+            "{xml}"
+        );
     }
 }

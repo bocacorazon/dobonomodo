@@ -3,8 +3,8 @@ use chrono::Utc;
 use dobo_core::engine::io_traits::DataLoader;
 use dobo_core::model::metadata_store::MetadataStore;
 use dobo_core::model::{
-    DataBlock, Dataset, ErrorType, LookupTarget, PeriodDef, Project, ProjectDef, TableRef,
-    TemporalMode, TestErrorDetail, TestResult, TestScenario, TestStatus,
+    DataBlock, Dataset, ErrorType, LookupTarget, PeriodDef, Project, ProjectDef, ResolvedLocation,
+    TableRef, TemporalMode, TestErrorDetail, TestResult, TestScenario, TestStatus,
 };
 use dobo_core::trace::trace_writer::TraceWriter;
 use polars::prelude::*;
@@ -154,18 +154,50 @@ fn execute_scenario_with_base_dir_and_store(
         None,
         false,
     ) {
-        Ok(Some(frame)) => match frame.collect() {
-            Ok(collected) => collected,
-            Err(e) => {
-                result.status = TestStatus::Error;
-                result.error = Some(TestErrorDetail {
-                    error_type: ErrorType::SchemaValidationError,
-                    message: e.to_string(),
-                    details: Some(format!("{:?}", e)),
-                });
-                return Ok(result);
+        Ok(Some(frame)) => {
+            let mut expected_loader = InMemoryDataLoader::new();
+            expected_loader.add_table("output".to_string(), frame);
+
+            let expected_schema = TableRef {
+                name: "output".to_string(),
+                temporal_mode: scenario.input.dataset.main_table.temporal_mode.clone(),
+                columns: scenario.input.dataset.main_table.columns.clone(),
+            };
+            let expected_location = ResolvedLocation {
+                datasource_id: "test".to_string(),
+                path: None,
+                table: Some("output".to_string()),
+                schema: None,
+                period_identifier: None,
+                catalog_response: None,
+            };
+
+            let expected_frame = match expected_loader.load(&expected_location, &expected_schema) {
+                Ok(expected_frame) => expected_frame,
+                Err(e) => {
+                    result.status = TestStatus::Error;
+                    result.error = Some(TestErrorDetail {
+                        error_type: ErrorType::SchemaValidationError,
+                        message: e.to_string(),
+                        details: Some(format!("{:?}", e)),
+                    });
+                    return Ok(result);
+                }
+            };
+
+            match expected_frame.collect() {
+                Ok(collected) => collected,
+                Err(e) => {
+                    result.status = TestStatus::Error;
+                    result.error = Some(TestErrorDetail {
+                        error_type: ErrorType::SchemaValidationError,
+                        message: e.to_string(),
+                        details: Some(format!("{:?}", e)),
+                    });
+                    return Ok(result);
+                }
             }
-        },
+        }
         Err(e) => {
             result.status = TestStatus::Error;
             result.error = Some(TestErrorDetail {
@@ -561,6 +593,7 @@ fn execute_pipeline_mock(
         table: Some(table_name.to_string()),
         schema: None,
         period_identifier: None,
+        catalog_response: None,
     };
 
     let table_ref = TableRef {
@@ -1111,7 +1144,10 @@ mod tests {
         assert!(result
             .error
             .as_ref()
-            .map(|error| error.message.contains("Schema mismatch"))
+            .map(|error| {
+                error.message.contains("Schema mismatch")
+                    || error.message.contains("missing required columns")
+            })
             .unwrap_or(false));
     }
 

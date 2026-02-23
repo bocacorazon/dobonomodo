@@ -1,6 +1,5 @@
 use crate::errors::TraceError;
-use anyhow::Result;
-use dobo_core::trace::trace_writer::TraceWriter;
+use dobo_core::trace::trace_writer::{TraceWriteError, TraceWriter};
 use dobo_core::trace::types::TraceEvent;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
@@ -64,8 +63,15 @@ impl Default for InMemoryTraceWriter {
 }
 
 impl TraceWriter for InMemoryTraceWriter {
-    fn write_events(&self, run_id: &Uuid, events: &[TraceEvent]) -> Result<()> {
-        self.append_events(run_id, events).map_err(Into::into)
+    fn write_events(
+        &self,
+        run_id: &Uuid,
+        events: &[TraceEvent],
+    ) -> std::result::Result<(), TraceWriteError> {
+        self.append_events(run_id, events)
+            .map_err(|error| TraceWriteError::WriteFailed {
+                message: error.to_string(),
+            })
     }
 }
 

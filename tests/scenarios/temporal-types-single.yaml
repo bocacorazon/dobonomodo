@@ -55,9 +55,11 @@ expected_output:
   data:
     rows:
       - id: 1
+        order_date: "2026-01-15"
+        captured_at: "2026-01-15T10:30:00"
 
 config:
-  match_mode: subset
+  match_mode: exact
   validate_metadata: false
   validate_traceability: false
   snapshot_on_failure: false
