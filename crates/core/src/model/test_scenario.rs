@@ -1,10 +1,10 @@
 use anyhow::{bail, Context, Result};
 use chrono::NaiveDate;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use uuid::Uuid;
 
-use super::{Dataset, Project};
+use super::{Dataset, LookupTarget, Project};
 
 // ============================================================================
 // Core Test Scenario Definition
@@ -59,6 +59,42 @@ impl TestScenario {
             block
                 .validate()
                 .with_context(|| format!("DataBlock '{}'", name))?;
+        }
+
+        let mut required_table_keys: HashSet<String> = HashSet::new();
+        required_table_keys.insert(self.input.dataset.main_table.name.clone());
+
+        for lookup in &self.input.dataset.lookups {
+            if let LookupTarget::Table { name, .. } = &lookup.target {
+                if let Some(alias) = &lookup.alias {
+                    required_table_keys.insert(alias.clone());
+                } else {
+                    required_table_keys.insert(name.clone());
+                }
+            }
+        }
+
+        let provided_table_keys: HashSet<String> = self.input.data.keys().cloned().collect();
+        let missing_tables: Vec<String> = required_table_keys
+            .difference(&provided_table_keys)
+            .cloned()
+            .collect();
+        if !missing_tables.is_empty() {
+            bail!(
+                "input.data is missing required table data for: {:?}",
+                missing_tables
+            );
+        }
+
+        let unknown_tables: Vec<String> = provided_table_keys
+            .difference(&required_table_keys)
+            .cloned()
+            .collect();
+        if !unknown_tables.is_empty() {
+            bail!(
+                "input.data contains unknown table keys not present in dataset definition: {:?}",
+                unknown_tables
+            );
         }
 
         // Validate expected output DataBlock
@@ -536,6 +572,79 @@ mod tests {
     #[test]
     fn test_validate_valid_scenario_succeeds() {
         let scenario = create_valid_scenario();
+        assert!(scenario.validate().is_ok());
+    }
+
+    #[test]
+    fn test_validate_missing_required_table_data_fails() {
+        let mut scenario = create_valid_scenario();
+        scenario.input.data.clear();
+
+        let result = scenario.validate();
+        assert!(result.is_err());
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("missing required table data"));
+    }
+
+    #[test]
+    fn test_validate_unknown_input_table_key_fails() {
+        let mut scenario = create_valid_scenario();
+        scenario.input.data.insert(
+            "unknown_table".to_string(),
+            DataBlock {
+                rows: Some(vec![HashMap::new()]),
+                file: None,
+            },
+        );
+
+        let result = scenario.validate();
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("unknown table keys"));
+    }
+
+    #[test]
+    fn test_validate_lookup_alias_requires_matching_input_data_key() {
+        let mut scenario = create_valid_scenario();
+        scenario.input.dataset.lookups = vec![crate::model::LookupDef {
+            alias: Some("products_alias".to_string()),
+            target: crate::model::LookupTarget::Table {
+                name: "products".to_string(),
+                temporal_mode: None,
+                columns: vec![],
+            },
+            join_conditions: vec![],
+        }];
+
+        let result = scenario.validate();
+        assert!(result.is_err());
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("products_alias"));
+    }
+
+    #[test]
+    fn test_validate_lookup_alias_data_key_succeeds_when_provided() {
+        let mut scenario = create_valid_scenario();
+        scenario.input.dataset.lookups = vec![crate::model::LookupDef {
+            alias: Some("products_alias".to_string()),
+            target: crate::model::LookupTarget::Table {
+                name: "products".to_string(),
+                temporal_mode: None,
+                columns: vec![],
+            },
+            join_conditions: vec![],
+        }];
+        scenario.input.data.insert(
+            "products_alias".to_string(),
+            DataBlock {
+                rows: Some(vec![HashMap::new()]),
+                file: None,
+            },
+        );
+
         assert!(scenario.validate().is_ok());
     }
 

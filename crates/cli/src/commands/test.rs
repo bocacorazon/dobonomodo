@@ -107,6 +107,10 @@ impl TestCommand {
         // Report results
         self.report_suite(&suite_result, output_format)?;
 
+        if !self.no_snapshot {
+            self.save_suite_snapshots(&suite_result, &scenarios)?;
+        }
+
         // Return exit code based on results
         Ok(if suite_result.errors > 0 {
             2
@@ -156,11 +160,31 @@ impl TestCommand {
         }
         Ok(())
     }
+
+    fn save_suite_snapshots(
+        &self,
+        suite_result: &SuiteResult,
+        scenarios: &[PathBuf],
+    ) -> Result<()> {
+        for (scenario_path, result) in scenarios.iter().zip(suite_result.results.iter()) {
+            if result.status == TestStatus::Fail {
+                save_snapshot(result, scenario_path)?;
+            }
+        }
+
+        Ok(())
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use dobo_core::model::DataBlock;
+    use serde_json::json;
+    use std::collections::HashMap;
+    use std::fs;
+    use tempfile::tempdir;
+    use uuid::Uuid;
 
     #[test]
     fn execution_target_defaults_to_suite_directory() {
@@ -193,5 +217,169 @@ mod tests {
             ExecutionTarget::Single(path) => assert_eq!(path, scenario.as_path()),
             ExecutionTarget::Suite(_) => panic!("expected single target"),
         }
+    }
+
+    #[test]
+    fn save_suite_snapshots_persists_failed_results() {
+        let temp_dir = tempdir().unwrap();
+        let scenario_path = temp_dir.path().join("scenario.yaml");
+        std::fs::write(&scenario_path, "name: scenario\n").unwrap();
+
+        let command = TestCommand {
+            scenario_path: None,
+            suite: None,
+            verbose: false,
+            no_snapshot: false,
+            output: "human".to_string(),
+        };
+
+        let result = TestResult {
+            scenario_name: "failing-scenario".to_string(),
+            status: TestStatus::Fail,
+            warnings: vec![],
+            data_mismatches: vec![],
+            trace_mismatches: vec![],
+            error: None,
+            actual_snapshot: Some(DataBlock {
+                rows: Some(vec![HashMap::from([("id".to_string(), json!(1))])]),
+                file: None,
+            }),
+        };
+        let suite_result = SuiteResult {
+            total: 1,
+            passed: 0,
+            failed: 1,
+            errors: 0,
+            results: vec![result],
+        };
+
+        command
+            .save_suite_snapshots(&suite_result, &[scenario_path])
+            .unwrap();
+
+        let snapshot_dir = temp_dir.path().join(".snapshots");
+        assert!(snapshot_dir.exists());
+        assert_eq!(std::fs::read_dir(snapshot_dir).unwrap().count(), 1);
+    }
+
+    #[test]
+    fn execute_single_supports_project_ref_with_fixture_metadata_store() {
+        let temp_dir = tempdir().unwrap();
+        let scenario_path = temp_dir.path().join("scenario.yaml");
+        let project_fixture_path = temp_dir.path().join("projects.yaml");
+        let dataset_id = Uuid::now_v7();
+        let project_id = Uuid::now_v7();
+
+        std::fs::write(
+            &scenario_path,
+            format!(
+                r#"
+name: "project-ref-cli"
+periods:
+  - identifier: "2026-01"
+    level: "month"
+    start_date: "2026-01-01"
+    end_date: "2026-01-31"
+input:
+  dataset:
+    id: "{dataset_id}"
+    name: "orders_dataset"
+    owner: "test"
+    version: 2
+    status: active
+    main_table:
+      name: "orders"
+      temporal_mode: period
+      columns:
+        - name: "id"
+          type: integer
+          nullable: false
+        - name: "value"
+          type: integer
+          nullable: false
+    lookups: []
+    natural_key_columns: ["id"]
+  data:
+    orders:
+      rows:
+        - id: 1
+          value: 10
+          _period: "2026-01"
+project:
+  id: "{project_id}"
+  version: 1
+expected_output:
+  data:
+    rows:
+      - id: 1
+        value: 10
+config:
+  match_mode: exact
+  validate_metadata: false
+  validate_traceability: false
+  snapshot_on_failure: true
+"#
+            ),
+        )
+        .unwrap();
+
+        std::fs::write(
+            &project_fixture_path,
+            format!(
+                r#"
+- id: "{project_id}"
+  name: "fixture-project"
+  owner: "test"
+  version: 3
+  status: active
+  visibility: private
+  input_dataset_id: "{dataset_id}"
+  input_dataset_version: 2
+  materialization: eager
+  operations: []
+  selectors: {{}}
+  resolver_overrides: {{}}
+"#
+            ),
+        )
+        .unwrap();
+
+        let command = TestCommand {
+            scenario_path: Some(scenario_path),
+            suite: None,
+            verbose: false,
+            no_snapshot: true,
+            output: "human".to_string(),
+        };
+
+        let exit_code = command.execute().unwrap();
+        assert_eq!(exit_code, 0);
+    }
+
+    #[test]
+    fn execute_suite_includes_exact_mode_failure_fixture() {
+        let temp_dir = tempdir().unwrap();
+        let suite_dir = temp_dir.path().join("suite");
+        fs::create_dir_all(&suite_dir).unwrap();
+
+        let workspace_root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("..")
+            .join("..");
+        let source_fixture = workspace_root.join("tests/scenarios/exact-match-test.yaml");
+        assert!(source_fixture.is_file());
+
+        let copied_fixture = suite_dir.join("exact-match-test.yaml");
+        fs::copy(source_fixture, &copied_fixture).unwrap();
+
+        let command = TestCommand {
+            scenario_path: None,
+            suite: Some(suite_dir),
+            verbose: false,
+            no_snapshot: true,
+            output: "human".to_string(),
+        };
+
+        let exit_code = command.execute().unwrap();
+        assert_eq!(exit_code, 1);
     }
 }

@@ -8,12 +8,18 @@ use dobo_core::model::{
 };
 use polars::prelude::*;
 use std::collections::HashMap;
-use std::path::{Path, PathBuf};
-use test_resolver::{inject_system_metadata_for_mode, InMemoryDataLoader, InMemoryMetadataStore};
+use std::path::{Component, Path, PathBuf};
+use test_resolver::errors::{InjectionError, LoaderError};
+use test_resolver::{
+    inject_system_metadata_for_mode, InMemoryDataLoader, InMemoryMetadataStore,
+    InMemoryTraceWriter,
+};
 use uuid::Uuid;
 use walkdir::WalkDir;
 
 use super::comparator::{compare_output, validate_trace_events};
+
+const PROJECT_FIXTURE_FILE: &str = "projects.yaml";
 
 /// Execute a single test scenario
 #[allow(dead_code)]
@@ -26,8 +32,32 @@ pub fn execute_scenario_with_base_dir(
     scenario: &TestScenario,
     scenario_base_dir: Option<&Path>,
 ) -> Result<TestResult> {
-    let metadata_store = InMemoryMetadataStore::new();
+    let metadata_store = load_metadata_store_from_fixture(scenario_base_dir)?;
     execute_scenario_with_base_dir_and_store(scenario, scenario_base_dir, &metadata_store)
+}
+
+fn load_metadata_store_from_fixture(
+    scenario_base_dir: Option<&Path>,
+) -> Result<InMemoryMetadataStore> {
+    let mut metadata_store = InMemoryMetadataStore::new();
+    let Some(base_dir) = scenario_base_dir else {
+        return Ok(metadata_store);
+    };
+
+    let fixture_path = base_dir.join(PROJECT_FIXTURE_FILE);
+    if !fixture_path.is_file() {
+        return Ok(metadata_store);
+    }
+
+    let fixture = std::fs::read_to_string(&fixture_path)
+        .with_context(|| format!("Failed to read '{}'", fixture_path.display()))?;
+    let projects: Vec<Project> = serde_yaml::from_str(&fixture)
+        .with_context(|| format!("Failed to parse '{}'", fixture_path.display()))?;
+    for project in projects {
+        metadata_store.add_project(project);
+    }
+
+    Ok(metadata_store)
 }
 
 fn execute_scenario_with_base_dir_and_store(
@@ -63,7 +93,7 @@ fn execute_scenario_with_base_dir_and_store(
             Err(e) => {
                 result.status = TestStatus::Error;
                 result.error = Some(TestErrorDetail {
-                    error_type: ErrorType::FileNotFound,
+                    error_type: classify_data_block_error(&e),
                     message: e.to_string(),
                     details: Some(format!("{:?}", e)),
                 });
@@ -91,6 +121,7 @@ fn execute_scenario_with_base_dir_and_store(
         }
     };
 
+    let trace_writer = InMemoryTraceWriter::new();
     let actual_df = match execute_pipeline_mock(&scenario.input.dataset, &project, &loader) {
         Ok(df) => df,
         Err(e) => {
@@ -127,7 +158,7 @@ fn execute_scenario_with_base_dir_and_store(
         Err(e) => {
             result.status = TestStatus::Error;
             result.error = Some(TestErrorDetail {
-                error_type: ErrorType::FileNotFound,
+                error_type: classify_data_block_error(&e),
                 message: e.to_string(),
                 details: Some(format!("{:?}", e)),
             });
@@ -181,13 +212,28 @@ fn execute_scenario_with_base_dir_and_store(
         }
     }
 
-    // T078: Integrate validate_trace_events() when validate_traceability is true
     if scenario.config.validate_traceability {
-        // For now, we use an empty trace since the mock executor doesn't generate traces
-        // This will be replaced when the real pipeline executor is integrated
-        let actual_trace: Vec<serde_json::Value> = vec![];
+        let collected_trace_events = trace_writer.get_events();
+        if collected_trace_events.is_empty() {
+            if scenario.expected_trace.is_empty() {
+                result.warnings.push(
+                    "Trace validation requested, but no trace events were emitted by the current pipeline executor"
+                        .to_string(),
+                );
+                return Ok(result);
+            }
 
-        // T079: Add trace mismatches to TestResult
+            result.status = TestStatus::Error;
+            result.error = Some(TestErrorDetail {
+                error_type: ErrorType::ExecutionError,
+                message: "Trace validation is unavailable because the current pipeline executor did not emit trace events"
+                    .to_string(),
+                details: None,
+            });
+            return Ok(result);
+        }
+
+        let actual_trace = trace_events_to_json(&collected_trace_events);
         let trace_mismatches = validate_trace_events(&actual_trace, &scenario.expected_trace)?;
 
         if !trace_mismatches.is_empty() {
@@ -348,31 +394,39 @@ fn inject_file_metadata_lazy(
     }
 
     let now = Utc::now().to_rfc3339();
-    let mut materialized = frame.collect()?;
-    let row_count = materialized.height();
+    let source_table = table_name.to_string();
+    let source_dataset_id = dataset_id;
 
-    let row_ids: Vec<String> = (0..row_count).map(|_| Uuid::now_v7().to_string()).collect();
+    Ok(frame.map(
+        move |mut dataframe| {
+            let row_count = dataframe.height();
+            let row_ids: Vec<String> = (0..row_count).map(|_| Uuid::now_v7().to_string()).collect();
 
-    materialized.with_column(Series::new("_row_id".into(), row_ids))?;
-    materialized.with_column(Series::new("_deleted".into(), vec![false; row_count]))?;
-    materialized.with_column(Series::new(
-        "_created_at".into(),
-        vec![now.clone(); row_count],
-    ))?;
-    materialized.with_column(Series::new(
-        "_updated_at".into(),
-        vec![now.clone(); row_count],
-    ))?;
-    materialized.with_column(Series::new(
-        "_source_dataset_id".into(),
-        vec![dataset_id; row_count],
-    ))?;
-    materialized.with_column(Series::new(
-        "_source_table".into(),
-        vec![table_name.to_string(); row_count],
-    ))?;
+            dataframe.with_column(Series::new("_row_id".into(), row_ids))?;
+            dataframe.with_column(Series::new("_deleted".into(), vec![false; row_count]))?;
+            dataframe.with_column(Series::new(
+                "_created_at".into(),
+                vec![now.clone(); row_count],
+            ))?;
+            dataframe.with_column(Series::new(
+                "_updated_at".into(),
+                vec![now.clone(); row_count],
+            ))?;
+            dataframe.with_column(Series::new(
+                "_source_dataset_id".into(),
+                vec![source_dataset_id.clone(); row_count],
+            ))?;
+            dataframe.with_column(Series::new(
+                "_source_table".into(),
+                vec![source_table.clone(); row_count],
+            ))?;
 
-    Ok(materialized.lazy())
+            Ok(dataframe)
+        },
+        AllowedOptimizations::default(),
+        None,
+        Some("inject_file_metadata"),
+    ))
 }
 
 fn validate_file_temporal_columns(
@@ -380,33 +434,78 @@ fn validate_file_temporal_columns(
     table_name: &str,
     temporal_mode: &TemporalMode,
 ) -> Result<()> {
+    let schema = frame
+        .clone()
+        .collect_schema()
+        .with_context(|| format!("Table '{}' schema could not be inferred", table_name))?;
+
     let required_columns: &[&str] = match temporal_mode {
         TemporalMode::Period => &["_period"],
         TemporalMode::Bitemporal => &["_period_from", "_period_to"],
     };
 
     for required in required_columns {
-        let has_nulls = frame
-            .clone()
-            .select([col(*required).is_null().any(true).alias("__has_missing")])
-            .collect()
-            .with_context(|| {
-                format!(
-                    "Table '{}' is missing required temporal column '{}'",
-                    table_name, required
-                )
-            })?
-            .column("__has_missing")?
-            .bool()?
-            .get(0)
-            .unwrap_or(false);
-
-        if has_nulls {
+        if schema.get(required).is_none() {
             bail!(
-                "Table '{}' row data is missing required temporal column '{}'",
+                "Table '{}' is missing required temporal column '{}'",
                 table_name,
                 required
             );
+        }
+    }
+
+    let temporal_values = frame
+        .clone()
+        .select(
+            required_columns
+                .iter()
+                .map(|column| col(*column))
+                .collect::<Vec<_>>(),
+        )
+        .collect()
+        .with_context(|| format!("Table '{}' temporal values could not be read", table_name))?;
+
+    for required in required_columns {
+        let series = temporal_values
+            .column(required)
+            .with_context(|| {
+                format!(
+                    "Table '{}' temporal column '{}' could not be accessed",
+                    table_name, required
+                )
+            })?
+            .as_materialized_series();
+
+        for row_idx in 0..series.len() {
+            let value = series.get(row_idx).with_context(|| {
+                format!(
+                    "Table '{}' temporal column '{}' row {} could not be read",
+                    table_name,
+                    required,
+                    row_idx + 1
+                )
+            })?;
+            if matches!(value, AnyValue::Null) {
+                bail!(
+                    "Table '{}' has missing required temporal value in column '{}' at row {}",
+                    table_name,
+                    required,
+                    row_idx + 1
+                );
+            }
+        }
+
+        if let Ok(strings) = series.str() {
+            for (row_idx, value) in strings.into_iter().enumerate() {
+                if value.is_some_and(|text| text.trim().is_empty()) {
+                    bail!(
+                        "Table '{}' has missing required temporal value in column '{}' at row {}",
+                        table_name,
+                        required,
+                        row_idx + 1
+                    );
+                }
+            }
         }
     }
 
@@ -471,6 +570,54 @@ fn dataframe_to_rows(df: &DataFrame) -> Vec<HashMap<String, serde_json::Value>> 
     rows
 }
 
+fn trace_events_to_json(trace_events: &[dobo_core::trace::types::TraceEvent]) -> Vec<serde_json::Value> {
+    trace_events
+        .iter()
+        .map(|event| {
+            match serde_json::from_str::<serde_json::Value>(&event.message) {
+                Ok(mut value @ serde_json::Value::Object(_)) => {
+                    if value.get("operation_order").is_none() {
+                        value["operation_order"] = serde_json::json!(event.operation_order as i32);
+                    }
+                    value
+                }
+                _ => serde_json::json!({
+                    "operation_order": event.operation_order as i32,
+                    "message": event.message,
+                }),
+            }
+        })
+        .collect()
+}
+
+fn classify_data_block_error(error: &anyhow::Error) -> ErrorType {
+    if error.downcast_ref::<InjectionError>().is_some() {
+        return ErrorType::SchemaValidationError;
+    }
+
+    if let Some(loader_error) = error.downcast_ref::<LoaderError>() {
+        return match loader_error {
+            LoaderError::TableNotFound { .. } | LoaderError::DataFrameBuild { .. } => {
+                ErrorType::SchemaValidationError
+            }
+            LoaderError::CsvLoad { .. } | LoaderError::ParquetLoad { .. } => ErrorType::ExecutionError,
+        };
+    }
+
+    let message = error.to_string();
+    if message.contains("Data file not found or unreadable") || message.contains("No such file") {
+        return ErrorType::FileNotFound;
+    }
+    if message.contains("Unsupported data file format")
+        || message.contains("missing required temporal")
+        || message.contains("Schema mismatch")
+    {
+        return ErrorType::SchemaValidationError;
+    }
+
+    ErrorType::ExecutionError
+}
+
 /// Extract value from column at specific index
 fn column_value_at(col: &Column, idx: usize) -> serde_json::Value {
     let series = col.as_materialized_series();
@@ -502,24 +649,35 @@ pub fn discover_scenarios(suite_path: &Path) -> Result<Vec<PathBuf>> {
 
     for entry in WalkDir::new(suite_path)
         .into_iter()
+        .filter_entry(|entry| {
+            let relative_path = entry
+                .path()
+                .strip_prefix(suite_path)
+                .unwrap_or_else(|_| entry.path());
+            !has_hidden_or_underscored_segment(relative_path)
+        })
         .filter_map(|e| e.ok())
         .filter(|e| e.file_type().is_file())
     {
         let path = entry.path();
         if let Some(ext) = path.extension() {
             if ext == "yaml" || ext == "yml" {
-                // Skip hidden files and underscore-prefixed files
-                if let Some(file_name) = path.file_name().and_then(|n| n.to_str()) {
-                    if !file_name.starts_with('.') && !file_name.starts_with('_') {
-                        scenarios.push(path.to_path_buf());
-                    }
-                }
+                scenarios.push(path.to_path_buf());
             }
         }
     }
 
     scenarios.sort();
     Ok(scenarios)
+}
+
+fn has_hidden_or_underscored_segment(path: &Path) -> bool {
+    path.components().any(|component| match component {
+        Component::Normal(segment) => segment
+            .to_str()
+            .is_some_and(|value| value.starts_with('.') || value.starts_with('_')),
+        _ => false,
+    })
 }
 
 /// Execute a test suite
@@ -847,7 +1005,7 @@ mod tests {
     }
 
     #[test]
-    fn validate_traceability_populates_trace_mismatches() {
+    fn validate_traceability_passes_when_trace_events_match() {
         let dataset = sample_dataset();
         let mut scenario = sample_scenario(dataset);
         scenario.config.validate_traceability = true;
@@ -859,8 +1017,72 @@ mod tests {
         }];
 
         let result = execute_scenario_with_base_dir(&scenario, None).unwrap();
-        assert_eq!(result.status, TestStatus::Fail);
-        assert_eq!(result.trace_mismatches.len(), 1);
+        assert_eq!(result.status, TestStatus::Error);
+        assert_eq!(
+            result.error.as_ref().map(|error| error.error_type),
+            Some(ErrorType::ExecutionError)
+        );
+        assert!(result
+            .error
+            .as_ref()
+            .map(|error| error.message.contains("did not emit trace events"))
+            .unwrap_or(false));
+    }
+
+    #[test]
+    fn validate_traceability_without_assertions_keeps_result_pass() {
+        let dataset = sample_dataset();
+        let mut scenario = sample_scenario(dataset);
+        scenario.config.validate_traceability = true;
+        scenario.expected_trace = vec![];
+
+        let result = execute_scenario_with_base_dir(&scenario, None).unwrap();
+        assert_eq!(result.status, TestStatus::Pass);
+        assert!(result.trace_mismatches.is_empty());
+        assert_eq!(result.warnings.len(), 1);
+        assert!(result.warnings[0].contains("no trace events were emitted"));
+    }
+
+    #[test]
+    fn missing_temporal_input_is_classified_as_schema_validation_error() {
+        let mut scenario = sample_scenario(sample_dataset());
+        scenario.input.data = HashMap::from([(
+            "orders".to_string(),
+            DataBlock {
+                rows: Some(vec![HashMap::from([
+                    ("id".to_string(), json!(1)),
+                    ("value".to_string(), json!(10)),
+                ])]),
+                file: None,
+            },
+        )]);
+
+        let result = execute_scenario_with_base_dir(&scenario, None).unwrap();
+        assert_eq!(result.status, TestStatus::Error);
+        assert_eq!(
+            result.error.as_ref().map(|error| error.error_type),
+            Some(ErrorType::SchemaValidationError)
+        );
+    }
+
+    #[test]
+    fn missing_input_file_is_classified_as_file_not_found() {
+        let dataset = sample_dataset();
+        let mut scenario = sample_scenario(dataset.clone());
+        scenario.input.data = HashMap::from([(
+            "orders".to_string(),
+            DataBlock {
+                rows: None,
+                file: Some("missing.csv".to_string()),
+            },
+        )]);
+
+        let result = execute_scenario_with_base_dir(&scenario, None).unwrap();
+        assert_eq!(result.status, TestStatus::Error);
+        assert_eq!(
+            result.error.as_ref().map(|error| error.error_type),
+            Some(ErrorType::FileNotFound)
+        );
     }
 
     #[test]
@@ -898,6 +1120,47 @@ mod tests {
             result.error.as_ref().map(|e| e.error_type),
             Some(ErrorType::ProjectNotFound)
         );
+    }
+
+    #[test]
+    fn project_ref_executes_via_base_dir_fixture_store() {
+        let temp = TempDir::new().unwrap();
+        let dataset = sample_dataset();
+        let mut scenario = sample_scenario(dataset.clone());
+        let project_id = Uuid::now_v7();
+        scenario.project = ProjectDef::Ref {
+            id: project_id,
+            version: 1,
+        };
+
+        fs::write(
+            temp.path().join(PROJECT_FIXTURE_FILE),
+            format!(
+                r#"
+- id: "{project_id}"
+  name: "fixture-project"
+  owner: "owner"
+  version: 3
+  status: active
+  visibility: private
+  input_dataset_id: "{dataset_id}"
+  input_dataset_version: {dataset_version}
+  materialization: eager
+  operations: []
+  selectors: {{}}
+  resolver_overrides: {{}}
+"#,
+                project_id = project_id,
+                dataset_id = dataset.id,
+                dataset_version = dataset.version
+            ),
+        )
+        .unwrap();
+
+        let result = execute_scenario_with_base_dir(&scenario, Some(temp.path())).unwrap();
+        assert_eq!(result.status, TestStatus::Pass);
+        assert_eq!(result.warnings.len(), 1);
+        assert!(result.warnings[0].contains("version drift"));
     }
 
     #[test]
@@ -939,5 +1202,78 @@ mod tests {
             .collect();
         assert!(column_names.contains(&"_row_id".to_string()));
         assert!(!column_names.contains(&"_period".to_string()));
+    }
+
+    #[test]
+    fn rejects_file_input_with_missing_temporal_values_in_csv() {
+        let temp = TempDir::new().unwrap();
+        let file_path = temp.path().join("input.csv");
+        let mut file = fs::File::create(&file_path).unwrap();
+        writeln!(file, "id,value,_period").unwrap();
+        writeln!(file, "1,10,").unwrap();
+
+        let dataset = sample_dataset();
+        let block = DataBlock {
+            rows: None,
+            file: Some("input.csv".to_string()),
+        };
+
+        let error = match load_data_block(&block, "orders", &dataset, Some(temp.path()), true) {
+            Ok(_) => panic!("expected missing temporal value error"),
+            Err(error) => error.to_string(),
+        };
+        assert!(error.contains("missing required temporal value"));
+        assert!(error.contains("_period"));
+    }
+
+    #[test]
+    fn rejects_parquet_input_with_missing_temporal_values() {
+        let temp = TempDir::new().unwrap();
+        let file_path = temp.path().join("input.parquet");
+
+        let mut dataframe = DataFrame::new(vec![
+            Series::new("id".into(), vec![1i64, 2i64]).into(),
+            Series::new("value".into(), vec![10i64, 20i64]).into(),
+            Series::new("_period".into(), vec![Some("2026-01"), None]).into(),
+        ])
+        .unwrap();
+        let mut file = fs::File::create(&file_path).unwrap();
+        ParquetWriter::new(&mut file)
+            .finish(&mut dataframe)
+            .unwrap();
+
+        let dataset = sample_dataset();
+        let block = DataBlock {
+            rows: None,
+            file: Some("input.parquet".to_string()),
+        };
+
+        let error = match load_data_block(&block, "orders", &dataset, Some(temp.path()), true) {
+            Ok(_) => panic!("expected missing temporal value error"),
+            Err(error) => error.to_string(),
+        };
+        assert!(error.contains("missing required temporal value"));
+        assert!(error.contains("_period"));
+    }
+
+    #[test]
+    fn discover_scenarios_ignores_hidden_snapshot_directories() {
+        let temp = TempDir::new().unwrap();
+        let suite_dir = temp.path().join("suite");
+        fs::create_dir_all(suite_dir.join(".snapshots")).unwrap();
+
+        fs::write(suite_dir.join("valid.yaml"), "name: valid").unwrap();
+        fs::write(
+            suite_dir.join(".snapshots").join("fail-actual.yaml"),
+            "this: should_not_be_discovered",
+        )
+        .unwrap();
+
+        let scenarios = discover_scenarios(&suite_dir).unwrap();
+        assert_eq!(scenarios.len(), 1);
+        assert_eq!(
+            scenarios[0].file_name().and_then(|name| name.to_str()),
+            Some("valid.yaml")
+        );
     }
 }
