@@ -97,7 +97,7 @@ After quality gates pass, the agent runs a **code review**:
    - Correct Polars lazy API usage
 3. Findings are classified as **CRITICAL**, **IMPORTANT**, or **MINOR**.
 
-**Fix cycle** (up to 3 rounds):
+**Fix cycle** (no fixed round limit):
 
 ```
 Review finds issues → Agent fixes CRITICAL + IMPORTANT findings
@@ -109,7 +109,7 @@ Review finds issues → Agent fixes CRITICAL + IMPORTANT findings
 **Outcomes:**
 - All findings resolved → status: `SUCCESS`
 - No CRITICAL findings but IMPORTANT/MINOR remain → status: `SUCCESS` (logged for reference)
-- CRITICAL findings persist after 3 rounds → status: `NEEDS_HUMAN_REVIEW`
+- `NEEDS_HUMAN_REVIEW` is used only when review indicates multiple valid alternative fixes and requires human choice.
 
 ### Stage 6: Phase-Gate Merge (Orchestrator)
 
@@ -168,7 +168,7 @@ Notes:
 
 ### Troubleshooting and Recovery
 
-#### 1) `NEEDS_HUMAN_REVIEW` after 3 review rounds
+#### 1) `NEEDS_HUMAN_REVIEW` when review presents alternative fixes
 
 Review artifacts in the spec worktree:
 
