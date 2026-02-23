@@ -1,7 +1,7 @@
-use anyhow::Result;
 use uuid::Uuid;
 
 use crate::model::{Dataset, Project, Resolver, RunStatus};
+use crate::Result;
 
 pub trait MetadataStore {
     fn get_dataset(&self, id: &Uuid, version: Option<i32>) -> Result<Dataset>;
