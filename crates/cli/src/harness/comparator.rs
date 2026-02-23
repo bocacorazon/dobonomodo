@@ -4,7 +4,7 @@ use dobo_core::model::{
     TraceMismatchType,
 };
 use polars::prelude::*;
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 
 type Row = HashMap<String, serde_json::Value>;
 type Rows = Vec<Row>;
@@ -39,26 +39,26 @@ pub fn compare_output(
 }
 
 fn ensure_matching_schema(actual: &DataFrame, expected: &DataFrame) -> Result<()> {
-    let actual_columns: Vec<String> = actual
-        .get_column_names()
-        .iter()
-        .map(|name| name.to_string())
-        .collect();
-    let expected_columns: Vec<String> = expected
-        .get_column_names()
-        .iter()
-        .map(|name| name.to_string())
-        .collect();
+    let actual_schema = schema_map(actual);
+    let expected_schema = schema_map(expected);
 
-    if actual_columns != expected_columns {
+    if actual_schema != expected_schema {
         bail!(
-            "Schema mismatch: expected columns {:?}, actual columns {:?}",
-            expected_columns,
-            actual_columns
+            "Schema mismatch: expected schema {:?}, actual schema {:?}",
+            expected_schema,
+            actual_schema
         );
     }
 
     Ok(())
+}
+
+fn schema_map(frame: &DataFrame) -> BTreeMap<String, DataType> {
+    frame
+        .get_columns()
+        .iter()
+        .map(|column| (column.name().to_string(), column.dtype().clone()))
+        .collect()
 }
 
 /// Strip system columns (those starting with _) from DataFrame
@@ -658,6 +658,23 @@ mod tests {
             .unwrap_err()
             .to_string();
         assert!(error.contains("Schema mismatch"));
+    }
+
+    #[test]
+    fn compare_output_accepts_reordered_columns_with_same_schema() {
+        let actual = df! {
+            "id" => &[1i64],
+            "value" => &[20i64],
+        }
+        .unwrap();
+        let expected = df! {
+            "value" => &[20i64],
+            "id" => &[1i64],
+        }
+        .unwrap();
+
+        let mismatches = compare_output(&actual, &expected, MatchMode::Exact, true, true).unwrap();
+        assert!(mismatches.is_empty());
     }
 
     #[test]

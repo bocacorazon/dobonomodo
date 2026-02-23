@@ -3,6 +3,7 @@ use anyhow::Result;
 use dobo_core::model::metadata_store::MetadataStore;
 use dobo_core::model::{Dataset, Project, Resolver, RunStatus};
 use std::collections::HashMap;
+use std::sync::Mutex;
 use uuid::Uuid;
 
 /// In-memory metadata store for test scenarios
@@ -10,6 +11,7 @@ pub struct InMemoryMetadataStore {
     datasets: HashMap<Uuid, Dataset>,
     projects: HashMap<Uuid, Project>,
     resolvers: HashMap<String, Resolver>,
+    run_statuses: Mutex<HashMap<Uuid, RunStatus>>,
 }
 
 impl InMemoryMetadataStore {
@@ -19,6 +21,7 @@ impl InMemoryMetadataStore {
             datasets: HashMap::new(),
             projects: HashMap::new(),
             resolvers: HashMap::new(),
+            run_statuses: Mutex::new(HashMap::new()),
         }
     }
 
@@ -95,8 +98,13 @@ impl MetadataStore for InMemoryMetadataStore {
         self.get_resolver_typed(id).map_err(Into::into)
     }
 
-    fn update_run_status(&self, _id: &Uuid, _status: RunStatus) -> Result<()> {
-        // No-op for test scenarios
+    fn update_run_status(&self, id: &Uuid, status: RunStatus) -> Result<()> {
+        self.run_statuses
+            .lock()
+            .map_err(|poisoned| MetadataError::LockPoisoned {
+                message: poisoned.to_string(),
+            })?
+            .insert(*id, status);
         Ok(())
     }
 }
@@ -154,5 +162,40 @@ mod tests {
 
         let error = store.get_dataset(&id, Some(1)).unwrap_err().to_string();
         assert!(error.contains("version mismatch"));
+    }
+
+    #[test]
+    fn update_run_status_persists_value() {
+        let store = InMemoryMetadataStore::new();
+        let run_id = Uuid::now_v7();
+
+        store
+            .update_run_status(&run_id, RunStatus::Running)
+            .expect("status update should persist");
+
+        let statuses = store
+            .run_statuses
+            .lock()
+            .expect("status map lock should succeed");
+        assert_eq!(statuses.get(&run_id), Some(&RunStatus::Running));
+    }
+
+    #[test]
+    fn update_run_status_overwrites_previous_value() {
+        let store = InMemoryMetadataStore::new();
+        let run_id = Uuid::now_v7();
+
+        store
+            .update_run_status(&run_id, RunStatus::Queued)
+            .expect("initial status update should persist");
+        store
+            .update_run_status(&run_id, RunStatus::Completed)
+            .expect("second status update should persist");
+
+        let statuses = store
+            .run_statuses
+            .lock()
+            .expect("status map lock should succeed");
+        assert_eq!(statuses.get(&run_id), Some(&RunStatus::Completed));
     }
 }

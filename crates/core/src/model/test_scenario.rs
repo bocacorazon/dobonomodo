@@ -601,7 +601,10 @@ mod tests {
 
         let result = scenario.validate();
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("unknown table keys"));
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("unknown table keys"));
     }
 
     #[test]
@@ -619,10 +622,7 @@ mod tests {
 
         let result = scenario.validate();
         assert!(result.is_err());
-        assert!(result
-            .unwrap_err()
-            .to_string()
-            .contains("products_alias"));
+        assert!(result.unwrap_err().to_string().contains("products_alias"));
     }
 
     #[test]
