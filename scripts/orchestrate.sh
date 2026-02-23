@@ -4,6 +4,7 @@
 # Usage:
 #   orchestrate.sh                      # Run all phases sequentially
 #   orchestrate.sh --phase 0-1          # Run only phase 0-1
+#   orchestrate.sh --phase 1 --phase-gate-only  # Merge completed phase from existing statuses
 #   orchestrate.sh --spec S01           # Run only spec S01
 #   orchestrate.sh --dry-run            # Show what would be done
 #   orchestrate.sh --max-parallel 4     # Limit concurrent containers
@@ -21,6 +22,7 @@ TARGET_PHASE=""
 TARGET_SPEC=""
 MAX_PARALLEL=8
 POLL_INTERVAL=30
+PHASE_GATE_ONLY=false
 
 # Parse args
 while [[ $# -gt 0 ]]; do
@@ -28,6 +30,7 @@ while [[ $# -gt 0 ]]; do
         --phase) TARGET_PHASE="$2"; shift 2 ;;
         --spec) TARGET_SPEC="$2"; shift 2 ;;
         --dry-run) DRY_RUN=true; shift ;;
+        --phase-gate-only) PHASE_GATE_ONLY=true; shift ;;
         --max-parallel) MAX_PARALLEL="$2"; shift 2 ;;
         --poll-interval) POLL_INTERVAL="$2"; shift 2 ;;
         *) echo "Unknown option: $1" >&2; exit 1 ;;
@@ -224,6 +227,73 @@ wait_for_specs() {
     done
 }
 
+validate_phase_ready_from_status() {
+    local specs=("$@")
+    local all_ready=true
+
+    echo ""
+    echo "Validating existing agent statuses for phase-gate merge..."
+    printf "%-8s %-25s %-22s %-s\n" "SPEC" "WORKTREE" "STATUS" "DETAIL"
+    printf "%-8s %-25s %-22s %-s\n" "----" "--------" "------" "------"
+
+    for spec in "${specs[@]}"; do
+        local worktree="$WORKTREE_BASE/dobonomodo-${spec}"
+        local detail="ok"
+        local status=""
+
+        if [ ! -d "$worktree" ]; then
+            status="MISSING_WORKTREE"
+            detail="run this spec first"
+            all_ready=false
+            printf "%-8s %-25s %-22s %-s\n" "$spec" "$(basename "$worktree")" "$status" "$detail"
+            continue
+        fi
+
+        if [ ! -f "$worktree/.agent-status" ]; then
+            status="MISSING_STATUS"
+            detail="no .agent-status in worktree"
+            all_ready=false
+            printf "%-8s %-25s %-22s %-s\n" "$spec" "$(basename "$worktree")" "$status" "$detail"
+            continue
+        fi
+
+        status="$(cat "$worktree/.agent-status")"
+        case "$status" in
+            SUCCESS)
+                detail="ready"
+                ;;
+            NEEDS_HUMAN_REVIEW)
+                detail="resolve .agent-review first"
+                all_ready=false
+                ;;
+            FAILED|BLOCKED)
+                detail="rerun/fix this spec first"
+                all_ready=false
+                ;;
+            RUNNING)
+                detail="wait for completion"
+                all_ready=false
+                ;;
+            *)
+                detail="unexpected status"
+                all_ready=false
+                ;;
+        esac
+
+        printf "%-8s %-25s %-22s %-s\n" "$spec" "$(basename "$worktree")" "$status" "$detail"
+    done
+
+    if ! $all_ready; then
+        echo ""
+        echo "❌ Phase is not ready for phase-gate merge."
+        return 1
+    fi
+
+    echo ""
+    echo "✅ All specs are SUCCESS and ready to merge."
+    return 0
+}
+
 phase_gate_merge() {
     local phase="$1"
     shift
@@ -317,35 +387,43 @@ run_phase() {
         done
     fi
 
-    # Limit concurrency
-    local batch_size=$MAX_PARALLEL
-    local i=0
-    local batch=()
-
-    for spec in "${specs[@]}"; do
-        batch+=("$spec")
-        i=$((i + 1))
-
-        if [ $i -ge "$batch_size" ] || [ $i -eq ${#specs[@]} ]; then
-            # Launch batch
-            for s in "${batch[@]}"; do
-                launch_spec "$s"
-            done
-
-            # Wait for batch
-            if ! wait_for_specs "${batch[@]}"; then
+    if $PHASE_GATE_ONLY; then
+        if ! $DRY_RUN; then
+            if ! validate_phase_ready_from_status "${specs[@]}"; then
                 return 1
             fi
-
-            batch=()
+        else
+            echo "[DRY-RUN] Would validate existing statuses for: ${specs[*]}"
         fi
-    done
+    else
+        # Limit concurrency
+        local batch_size=$MAX_PARALLEL
+        local i=0
+        local batch=()
+
+        for spec in "${specs[@]}"; do
+            batch+=("$spec")
+            i=$((i + 1))
+
+            if [ $i -ge "$batch_size" ] || [ $i -eq ${#specs[@]} ]; then
+                # Launch batch
+                for s in "${batch[@]}"; do
+                    launch_spec "$s"
+                done
+
+                # Wait for batch
+                if ! wait_for_specs "${batch[@]}"; then
+                    return 1
+                fi
+
+                batch=()
+            fi
+        done
+    fi
 
     # Phase-gate merge
-    if ! $DRY_RUN; then
-        if ! phase_gate_merge "$phase" "${specs[@]}"; then
-            return 1
-        fi
+    if ! phase_gate_merge "$phase" "${specs[@]}"; then
+        return 1
     fi
 
     COMPLETED_PHASES[$phase]="done"
@@ -359,6 +437,16 @@ echo "======================="
 echo "Spec map: $SPEC_MAP"
 echo "Max parallel: $MAX_PARALLEL"
 echo "Dry run: $DRY_RUN"
+echo "Phase-gate-only: $PHASE_GATE_ONLY"
+
+if $PHASE_GATE_ONLY && [ -n "$TARGET_SPEC" ]; then
+    echo "ERROR: --phase-gate-only cannot be used with --spec." >&2
+    exit 1
+fi
+if $PHASE_GATE_ONLY && [ -z "$TARGET_PHASE" ]; then
+    echo "ERROR: --phase-gate-only requires --phase <id>." >&2
+    exit 1
+fi
 
 # Handle single spec mode
 if [ -n "$TARGET_SPEC" ]; then
