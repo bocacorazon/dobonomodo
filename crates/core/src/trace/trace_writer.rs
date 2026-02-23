@@ -11,5 +11,9 @@ pub enum TraceWriteError {
 }
 
 pub trait TraceWriter {
-    fn write_events(&self, run_id: &Uuid, events: &[TraceEvent]) -> Result<(), TraceWriteError>;
+    fn write_events(
+        &self,
+        run_id: &Uuid,
+        events: &[TraceEvent],
+    ) -> std::result::Result<(), TraceWriteError>;
 }
