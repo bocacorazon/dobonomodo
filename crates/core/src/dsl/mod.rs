@@ -22,12 +22,17 @@
 //! # Example
 //!
 //! ```ignore
-//! use dobo_core::dsl::{parse_expression, validate_expression, compile_expression};
+//! use dobo_core::dsl::{
+//!     parse_expression, validate_expression, compile_expression, CompilationContext, ColumnType,
+//! };
 //!
 //! let source = "transactions.amount * 1.1";
+//! let mut context = CompilationContext::new();
+//! context.add_column("transactions.amount", ColumnType::Float);
+//!
 //! let ast = parse_expression(source)?;
-//! let typed_ast = validate_expression(&ast, &schema, &context)?;
-//! let polars_expr = compile_expression(source, &typed_ast, &context)?.into_expr();
+//! validate_expression(&ast, &context)?;
+//! let polars_expr = compile_expression(source, &ast, &context)?.into_expr();
 //! ```
 //!
 //! ```ignore
