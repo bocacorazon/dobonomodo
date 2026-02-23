@@ -1,3 +1,4 @@
+use dobo_core::model::ColumnType;
 use polars::error::PolarsError;
 use std::path::PathBuf;
 use thiserror::Error;
@@ -27,6 +28,44 @@ pub enum LoaderError {
         table: String,
         available: Vec<String>,
     },
+    #[error("Failed to inspect schema for table '{table}'")]
+    SchemaInspection {
+        table: String,
+        #[source]
+        source: PolarsError,
+    },
+    #[error("Table '{table}' is missing required columns: {missing:?}")]
+    MissingColumns { table: String, missing: Vec<String> },
+    #[error("Table '{table}' contains unexpected columns: {unexpected:?}")]
+    UnexpectedColumns {
+        table: String,
+        unexpected: Vec<String>,
+    },
+    #[error("Table '{table}' column '{column}' cannot be cast to '{expected_type:?}'")]
+    TypeMismatch {
+        table: String,
+        column: String,
+        expected_type: ColumnType,
+        #[source]
+        source: PolarsError,
+    },
+    #[error(
+        "Inline data type mismatch at row {row_index}, column '{column}': expected {expected_type}, got {actual_type}"
+    )]
+    InlineValueTypeMismatch {
+        row_index: usize,
+        column: String,
+        expected_type: &'static str,
+        actual_type: &'static str,
+    },
+    #[error(
+        "Inline data contains unsupported value type at row {row_index}, column '{column}': {actual_type}"
+    )]
+    InlineUnsupportedValueType {
+        row_index: usize,
+        column: String,
+        actual_type: &'static str,
+    },
 }
 
 #[derive(Debug, Error)]
@@ -43,6 +82,8 @@ pub enum MetadataError {
     ProjectNotFound { id: Uuid },
     #[error("Resolver '{id}' not found in test metadata store")]
     ResolverNotFound { id: String },
+    #[error("Failed to lock metadata store state: {message}")]
+    LockPoisoned { message: String },
 }
 
 #[derive(Debug, Error)]

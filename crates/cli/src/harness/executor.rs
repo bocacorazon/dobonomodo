@@ -6,13 +6,13 @@ use dobo_core::model::{
     DataBlock, Dataset, ErrorType, LookupTarget, Project, ProjectDef, TableRef, TemporalMode,
     TestErrorDetail, TestResult, TestScenario, TestStatus,
 };
+use dobo_core::trace::trace_writer::TraceWriter;
 use polars::prelude::*;
 use std::collections::HashMap;
 use std::path::{Component, Path, PathBuf};
 use test_resolver::errors::{InjectionError, LoaderError};
 use test_resolver::{
-    inject_system_metadata_for_mode, InMemoryDataLoader, InMemoryMetadataStore,
-    InMemoryTraceWriter,
+    inject_system_metadata_for_mode, InMemoryDataLoader, InMemoryMetadataStore, InMemoryTraceWriter,
 };
 use uuid::Uuid;
 use walkdir::WalkDir;
@@ -122,7 +122,14 @@ fn execute_scenario_with_base_dir_and_store(
     };
 
     let trace_writer = InMemoryTraceWriter::new();
-    let actual_df = match execute_pipeline_mock(&scenario.input.dataset, &project, &loader) {
+    let run_id = Uuid::now_v7();
+    let actual_df = match execute_pipeline_mock(
+        &scenario.input.dataset,
+        &project,
+        &loader,
+        &trace_writer,
+        &run_id,
+    ) {
         Ok(df) => df,
         Err(e) => {
             result.status = TestStatus::Error;
@@ -213,23 +220,14 @@ fn execute_scenario_with_base_dir_and_store(
     }
 
     if scenario.config.validate_traceability {
-        let collected_trace_events = trace_writer.get_events();
-        if collected_trace_events.is_empty() {
-            if scenario.expected_trace.is_empty() {
+        let collected_trace_events = trace_writer.get_events_for_run(&run_id);
+        if scenario.expected_trace.is_empty() {
+            if collected_trace_events.is_empty() {
                 result.warnings.push(
                     "Trace validation requested, but no trace events were emitted by the current pipeline executor"
                         .to_string(),
                 );
-                return Ok(result);
             }
-
-            result.status = TestStatus::Error;
-            result.error = Some(TestErrorDetail {
-                error_type: ErrorType::ExecutionError,
-                message: "Trace validation is unavailable because the current pipeline executor did not emit trace events"
-                    .to_string(),
-                details: None,
-            });
             return Ok(result);
         }
 
@@ -270,7 +268,7 @@ fn load_data_block(
 
         Ok(Some(frame))
     } else if let Some(file_path) = &block.file {
-        let resolved = resolve_data_file_path(file_path, scenario_base_dir);
+        let resolved = resolve_data_file_path(file_path, scenario_base_dir)?;
         if !resolved.is_file() {
             anyhow::bail!("Data file not found or unreadable: {}", resolved.display());
         }
@@ -306,15 +304,47 @@ fn load_data_block(
     }
 }
 
-fn resolve_data_file_path(file_path: &str, scenario_base_dir: Option<&Path>) -> PathBuf {
+fn resolve_data_file_path(file_path: &str, scenario_base_dir: Option<&Path>) -> Result<PathBuf> {
     let path = PathBuf::from(file_path);
+    let Some(base_dir) = scenario_base_dir else {
+        return Ok(path);
+    };
+
     if path.is_absolute() {
-        path
-    } else if let Some(base_dir) = scenario_base_dir {
-        base_dir.join(path)
-    } else {
-        path
+        bail!(
+            "Data file path '{}' must be relative to the scenario directory",
+            file_path
+        );
     }
+
+    let base_dir_canonical = base_dir.canonicalize().with_context(|| {
+        format!(
+            "Failed to resolve scenario directory '{}'",
+            base_dir.display()
+        )
+    })?;
+    let joined = base_dir.join(&path);
+
+    if let Ok(resolved_canonical) = joined.canonicalize() {
+        if !resolved_canonical.starts_with(&base_dir_canonical) {
+            bail!(
+                "Data file path '{}' must stay under scenario directory '{}'",
+                file_path,
+                base_dir.display()
+            );
+        }
+    } else if path
+        .components()
+        .any(|component| matches!(component, Component::ParentDir | Component::RootDir))
+    {
+        bail!(
+            "Data file path '{}' must stay under scenario directory '{}'",
+            file_path,
+            base_dir.display()
+        );
+    }
+
+    Ok(joined)
 }
 
 fn resolve_project(
@@ -515,15 +545,17 @@ fn validate_file_temporal_columns(
 /// Passthrough mock pipeline execution
 /// Returns input data unchanged until real pipeline executor is available
 fn execute_pipeline_mock(
-    _dataset: &Dataset,
+    dataset: &Dataset,
     _project: &Project,
     loader: &InMemoryDataLoader,
+    trace_writer: &impl TraceWriter,
+    run_id: &Uuid,
 ) -> Result<DataFrame> {
     // For passthrough, just return the first table's data
     // In real implementation, this would call core::engine::execute_pipeline
 
     // Get the table name from the dataset
-    let table_name = &_dataset.main_table.name;
+    let table_name = &dataset.main_table.name;
 
     // Load via the location/schema (simplified for mock)
     let location = dobo_core::model::ResolvedLocation {
@@ -536,12 +568,39 @@ fn execute_pipeline_mock(
 
     let table_ref = TableRef {
         name: table_name.to_string(),
-        temporal_mode: _dataset.main_table.temporal_mode.clone(),
-        columns: _dataset.main_table.columns.clone(),
+        temporal_mode: dataset.main_table.temporal_mode.clone(),
+        columns: dataset.main_table.columns.clone(),
     };
 
     let frame = loader.load(&location, &table_ref)?;
-    Ok(frame.collect()?)
+    let dataframe = frame.collect()?;
+    emit_created_trace_events(trace_writer, run_id, &dataframe)?;
+    Ok(dataframe)
+}
+
+fn emit_created_trace_events(
+    trace_writer: &impl TraceWriter,
+    run_id: &Uuid,
+    dataframe: &DataFrame,
+) -> Result<()> {
+    let events: Vec<dobo_core::trace::types::TraceEvent> = dataframe_to_rows(dataframe)
+        .into_iter()
+        .map(|row| dobo_core::trace::types::TraceEvent {
+            operation_order: 1,
+            message: serde_json::json!({
+                "operation_order": 1,
+                "change_type": "created",
+                "after": row,
+            })
+            .to_string(),
+        })
+        .collect();
+
+    if !events.is_empty() {
+        trace_writer.write_events(run_id, &events)?;
+    }
+
+    Ok(())
 }
 
 /// Convert DataFrame to DataBlock
@@ -570,11 +629,13 @@ fn dataframe_to_rows(df: &DataFrame) -> Vec<HashMap<String, serde_json::Value>> 
     rows
 }
 
-fn trace_events_to_json(trace_events: &[dobo_core::trace::types::TraceEvent]) -> Vec<serde_json::Value> {
+fn trace_events_to_json(
+    trace_events: &[dobo_core::trace::types::TraceEvent],
+) -> Vec<serde_json::Value> {
     trace_events
         .iter()
-        .map(|event| {
-            match serde_json::from_str::<serde_json::Value>(&event.message) {
+        .map(
+            |event| match serde_json::from_str::<serde_json::Value>(&event.message) {
                 Ok(mut value @ serde_json::Value::Object(_)) => {
                     if value.get("operation_order").is_none() {
                         value["operation_order"] = serde_json::json!(event.operation_order as i32);
@@ -585,8 +646,8 @@ fn trace_events_to_json(trace_events: &[dobo_core::trace::types::TraceEvent]) ->
                     "operation_order": event.operation_order as i32,
                     "message": event.message,
                 }),
-            }
-        })
+            },
+        )
         .collect()
 }
 
@@ -597,10 +658,17 @@ fn classify_data_block_error(error: &anyhow::Error) -> ErrorType {
 
     if let Some(loader_error) = error.downcast_ref::<LoaderError>() {
         return match loader_error {
-            LoaderError::TableNotFound { .. } | LoaderError::DataFrameBuild { .. } => {
-                ErrorType::SchemaValidationError
+            LoaderError::TableNotFound { .. }
+            | LoaderError::DataFrameBuild { .. }
+            | LoaderError::SchemaInspection { .. }
+            | LoaderError::MissingColumns { .. }
+            | LoaderError::UnexpectedColumns { .. }
+            | LoaderError::TypeMismatch { .. }
+            | LoaderError::InlineValueTypeMismatch { .. }
+            | LoaderError::InlineUnsupportedValueType { .. } => ErrorType::SchemaValidationError,
+            LoaderError::CsvLoad { .. } | LoaderError::ParquetLoad { .. } => {
+                ErrorType::ExecutionError
             }
-            LoaderError::CsvLoad { .. } | LoaderError::ParquetLoad { .. } => ErrorType::ExecutionError,
         };
     }
 
@@ -1017,16 +1085,9 @@ mod tests {
         }];
 
         let result = execute_scenario_with_base_dir(&scenario, None).unwrap();
-        assert_eq!(result.status, TestStatus::Error);
-        assert_eq!(
-            result.error.as_ref().map(|error| error.error_type),
-            Some(ErrorType::ExecutionError)
-        );
-        assert!(result
-            .error
-            .as_ref()
-            .map(|error| error.message.contains("did not emit trace events"))
-            .unwrap_or(false));
+        assert_eq!(result.status, TestStatus::Pass);
+        assert!(result.trace_mismatches.is_empty());
+        assert!(result.error.is_none());
     }
 
     #[test]
@@ -1039,8 +1100,7 @@ mod tests {
         let result = execute_scenario_with_base_dir(&scenario, None).unwrap();
         assert_eq!(result.status, TestStatus::Pass);
         assert!(result.trace_mismatches.is_empty());
-        assert_eq!(result.warnings.len(), 1);
-        assert!(result.warnings[0].contains("no trace events were emitted"));
+        assert!(result.warnings.is_empty());
     }
 
     #[test]
@@ -1254,6 +1314,48 @@ mod tests {
         };
         assert!(error.contains("missing required temporal value"));
         assert!(error.contains("_period"));
+    }
+
+    #[test]
+    fn rejects_file_path_traversal_outside_scenario_directory() {
+        let temp = TempDir::new().unwrap();
+        let scenario_dir = temp.path().join("suite");
+        fs::create_dir_all(&scenario_dir).unwrap();
+        let outside_file = temp.path().join("outside.csv");
+        fs::write(&outside_file, "id,value\n1,10\n").unwrap();
+
+        let dataset = sample_dataset();
+        let block = DataBlock {
+            rows: None,
+            file: Some("../outside.csv".to_string()),
+        };
+
+        let error = match load_data_block(&block, "orders", &dataset, Some(&scenario_dir), false) {
+            Ok(_) => panic!("expected path traversal to be rejected"),
+            Err(error) => error.to_string(),
+        };
+        assert!(error.contains("must stay under scenario directory"));
+    }
+
+    #[test]
+    fn rejects_absolute_file_path_when_scenario_directory_is_set() {
+        let temp = TempDir::new().unwrap();
+        let scenario_dir = temp.path().join("suite");
+        fs::create_dir_all(&scenario_dir).unwrap();
+        let outside_file = temp.path().join("outside.csv");
+        fs::write(&outside_file, "id,value\n1,10\n").unwrap();
+
+        let dataset = sample_dataset();
+        let block = DataBlock {
+            rows: None,
+            file: Some(outside_file.display().to_string()),
+        };
+
+        let error = match load_data_block(&block, "orders", &dataset, Some(&scenario_dir), false) {
+            Ok(_) => panic!("expected absolute path to be rejected"),
+            Err(error) => error.to_string(),
+        };
+        assert!(error.contains("must be relative to the scenario directory"));
     }
 
     #[test]

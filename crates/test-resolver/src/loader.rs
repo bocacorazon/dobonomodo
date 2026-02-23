@@ -1,9 +1,9 @@
 use crate::errors::LoaderError;
 use anyhow::Result;
 use dobo_core::engine::io_traits::DataLoader;
-use dobo_core::model::{ResolvedLocation, TableRef};
+use dobo_core::model::{ColumnType, ResolvedLocation, TableRef};
 use polars::prelude::*;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::Path;
 
 /// In-memory data loader for test scenarios
@@ -45,51 +45,103 @@ impl InMemoryDataLoader {
         // Build series for each column
         let mut series_vec = Vec::new();
         for col_name in &columns {
-            let values: Vec<_> = rows.iter().map(|row| row.get(col_name)).collect();
+            let inferred_type = rows.iter().enumerate().find_map(|(row_index, row)| {
+                row.get(col_name).and_then(|value| {
+                    if value.is_null() {
+                        None
+                    } else {
+                        Some((row_index, Self::infer_inline_type(value), value))
+                    }
+                })
+            });
 
-            // Infer type from first non-null value
-            let series = if let Some(first_value) = values.iter().find_map(|v| *v) {
-                match first_value {
-                    serde_json::Value::Bool(_) => {
-                        let vals: Vec<Option<bool>> = values
+            let series = if let Some((row_index, inferred_type, inferred_value)) = inferred_type {
+                if inferred_type == InlineType::Unsupported {
+                    return Err(LoaderError::InlineUnsupportedValueType {
+                        row_index,
+                        column: col_name.clone(),
+                        actual_type: Self::json_value_type_name(inferred_value),
+                    });
+                }
+
+                match inferred_type {
+                    InlineType::Bool => {
+                        let vals: std::result::Result<Vec<Option<bool>>, LoaderError> = rows
                             .iter()
-                            .map(|v| v.and_then(|val| val.as_bool()))
-                            .collect();
-                        Series::new(col_name.into(), vals)
-                    }
-                    serde_json::Value::Number(n) => {
-                        if n.is_i64() {
-                            let vals: Vec<Option<i64>> = values
-                                .iter()
-                                .map(|v| v.and_then(|val| val.as_i64()))
-                                .collect();
-                            Series::new(col_name.into(), vals)
-                        } else {
-                            let vals: Vec<Option<f64>> = values
-                                .iter()
-                                .map(|v| v.and_then(|val| val.as_f64()))
-                                .collect();
-                            Series::new(col_name.into(), vals)
-                        }
-                    }
-                    serde_json::Value::String(_) => {
-                        let vals: Vec<Option<&str>> = values
-                            .iter()
-                            .map(|v| v.and_then(|val| val.as_str()))
-                            .collect();
-                        Series::new(col_name.into(), vals)
-                    }
-                    _ => {
-                        // Default to string representation
-                        let vals: Vec<String> = values
-                            .iter()
-                            .map(|v| {
-                                v.map(|val| val.to_string())
-                                    .unwrap_or_else(|| "null".to_string())
+                            .enumerate()
+                            .map(|(idx, row)| {
+                                Self::extract_typed_value::<bool>(
+                                    row.get(col_name),
+                                    idx,
+                                    col_name,
+                                    "boolean",
+                                    |value| match value {
+                                        serde_json::Value::Bool(boolean) => Some(*boolean),
+                                        _ => None,
+                                    },
+                                )
                             })
                             .collect();
-                        Series::new(col_name.into(), vals)
+                        Series::new(col_name.into(), vals?)
                     }
+                    InlineType::Int64 => {
+                        let vals: std::result::Result<Vec<Option<i64>>, LoaderError> = rows
+                            .iter()
+                            .enumerate()
+                            .map(|(idx, row)| {
+                                Self::extract_typed_value::<i64>(
+                                    row.get(col_name),
+                                    idx,
+                                    col_name,
+                                    "integer",
+                                    |value| match value {
+                                        serde_json::Value::Number(number) => number.as_i64(),
+                                        _ => None,
+                                    },
+                                )
+                            })
+                            .collect();
+                        Series::new(col_name.into(), vals?)
+                    }
+                    InlineType::Float64 => {
+                        let vals: std::result::Result<Vec<Option<f64>>, LoaderError> = rows
+                            .iter()
+                            .enumerate()
+                            .map(|(idx, row)| {
+                                Self::extract_typed_value::<f64>(
+                                    row.get(col_name),
+                                    idx,
+                                    col_name,
+                                    "number",
+                                    |value| match value {
+                                        serde_json::Value::Number(number) => number.as_f64(),
+                                        _ => None,
+                                    },
+                                )
+                            })
+                            .collect();
+                        Series::new(col_name.into(), vals?)
+                    }
+                    InlineType::String => {
+                        let vals: std::result::Result<Vec<Option<&str>>, LoaderError> = rows
+                            .iter()
+                            .enumerate()
+                            .map(|(idx, row)| {
+                                Self::extract_typed_value::<&str>(
+                                    row.get(col_name),
+                                    idx,
+                                    col_name,
+                                    "string",
+                                    |value| match value {
+                                        serde_json::Value::String(string) => Some(string.as_str()),
+                                        _ => None,
+                                    },
+                                )
+                            })
+                            .collect();
+                        Series::new(col_name.into(), vals?)
+                    }
+                    InlineType::Unsupported => unreachable!("handled before match"),
                 }
             } else {
                 // All nulls - create string series
@@ -133,6 +185,149 @@ impl InMemoryDataLoader {
                 available: self.data.keys().cloned().collect(),
             })
     }
+
+    fn enforce_schema(
+        frame: LazyFrame,
+        schema: &TableRef,
+    ) -> std::result::Result<LazyFrame, LoaderError> {
+        if schema.columns.is_empty() {
+            return Ok(frame);
+        }
+
+        let collected_schema =
+            frame
+                .clone()
+                .collect_schema()
+                .map_err(|source| LoaderError::SchemaInspection {
+                    table: schema.name.clone(),
+                    source,
+                })?;
+
+        let actual_columns: HashSet<String> = collected_schema
+            .iter_names()
+            .map(|name| name.to_string())
+            .collect();
+        let expected_columns: HashSet<String> = schema
+            .columns
+            .iter()
+            .map(|column| column.name.clone())
+            .collect();
+
+        let mut missing: Vec<String> = expected_columns
+            .difference(&actual_columns)
+            .cloned()
+            .collect();
+        missing.sort();
+        if !missing.is_empty() {
+            return Err(LoaderError::MissingColumns {
+                table: schema.name.clone(),
+                missing,
+            });
+        }
+
+        let mut unexpected: Vec<String> = actual_columns
+            .difference(&expected_columns)
+            .filter(|name| !Self::is_allowed_extra_column(name))
+            .cloned()
+            .collect();
+        unexpected.sort();
+        if !unexpected.is_empty() {
+            return Err(LoaderError::UnexpectedColumns {
+                table: schema.name.clone(),
+                unexpected,
+            });
+        }
+
+        let cast_exprs: Vec<_> = schema
+            .columns
+            .iter()
+            .map(|column| {
+                col(&column.name)
+                    .strict_cast(Self::polars_type(&column.column_type))
+                    .alias(&column.name)
+            })
+            .collect();
+
+        Ok(frame.with_columns(cast_exprs))
+    }
+
+    fn is_allowed_extra_column(name: &str) -> bool {
+        name.starts_with('_')
+    }
+
+    fn polars_type(column_type: &ColumnType) -> DataType {
+        match column_type {
+            ColumnType::String => DataType::String,
+            ColumnType::Integer => DataType::Int64,
+            ColumnType::Decimal => DataType::Float64,
+            ColumnType::Boolean => DataType::Boolean,
+            ColumnType::Date => DataType::Date,
+            ColumnType::Timestamp => DataType::Datetime(TimeUnit::Milliseconds, None),
+        }
+    }
+
+    fn extract_typed_value<'a, T>(
+        value: Option<&'a serde_json::Value>,
+        row_index: usize,
+        column: &str,
+        expected_type: &'static str,
+        extractor: impl FnOnce(&'a serde_json::Value) -> Option<T>,
+    ) -> std::result::Result<Option<T>, LoaderError> {
+        match value {
+            None | Some(serde_json::Value::Null) => Ok(None),
+            Some(non_null) => {
+                extractor(non_null)
+                    .map(Some)
+                    .ok_or_else(|| LoaderError::InlineValueTypeMismatch {
+                        row_index,
+                        column: column.to_string(),
+                        expected_type,
+                        actual_type: Self::json_value_type_name(non_null),
+                    })
+            }
+        }
+    }
+
+    fn infer_inline_type(value: &serde_json::Value) -> InlineType {
+        match value {
+            serde_json::Value::Bool(_) => InlineType::Bool,
+            serde_json::Value::Number(number) => {
+                if number.is_i64() {
+                    InlineType::Int64
+                } else {
+                    InlineType::Float64
+                }
+            }
+            serde_json::Value::String(_) => InlineType::String,
+            _ => InlineType::Unsupported,
+        }
+    }
+
+    fn json_value_type_name(value: &serde_json::Value) -> &'static str {
+        match value {
+            serde_json::Value::Null => "null",
+            serde_json::Value::Bool(_) => "boolean",
+            serde_json::Value::Number(number) => {
+                if number.is_i64() {
+                    "integer"
+                } else {
+                    "number"
+                }
+            }
+            serde_json::Value::String(_) => "string",
+            serde_json::Value::Array(_) => "array",
+            serde_json::Value::Object(_) => "object",
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum InlineType {
+    Bool,
+    Int64,
+    Float64,
+    String,
+    Unsupported,
 }
 
 impl Default for InMemoryDataLoader {
@@ -142,15 +337,17 @@ impl Default for InMemoryDataLoader {
 }
 
 impl DataLoader for InMemoryDataLoader {
-    fn load(&self, location: &ResolvedLocation, _schema: &TableRef) -> Result<LazyFrame> {
+    fn load(&self, location: &ResolvedLocation, schema: &TableRef) -> Result<LazyFrame> {
         let table_name = location.table.as_deref().unwrap_or("unknown");
-        self.load_table(table_name).map_err(Into::into)
+        let frame = self.load_table(table_name)?;
+        Self::enforce_schema(frame, schema).map_err(Into::into)
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use dobo_core::model::{ColumnDef, ColumnType};
     use serde_json::json;
     use std::fs;
     use std::io::Write;
@@ -194,6 +391,33 @@ mod tests {
 
         let df = result.unwrap().collect().unwrap();
         assert_eq!(df.height(), 2);
+    }
+
+    #[test]
+    fn test_build_lazyframe_rejects_inline_type_mismatch() {
+        let rows = vec![
+            HashMap::from([("value".to_string(), json!(1))]),
+            HashMap::from([("value".to_string(), json!("invalid"))]),
+        ];
+
+        let error = match InMemoryDataLoader::build_lazyframe(rows) {
+            Ok(_) => panic!("expected inline type mismatch"),
+            Err(error) => error.to_string(),
+        };
+        assert!(error.contains("Inline data type mismatch"));
+        assert!(error.contains("column 'value'"));
+    }
+
+    #[test]
+    fn test_build_lazyframe_rejects_inline_unsupported_type() {
+        let rows = vec![HashMap::from([("value".to_string(), json!({"nested": 1}))])];
+
+        let error = match InMemoryDataLoader::build_lazyframe(rows) {
+            Ok(_) => panic!("expected unsupported inline value type"),
+            Err(error) => error.to_string(),
+        };
+        assert!(error.contains("unsupported value type"));
+        assert!(error.contains("object"));
     }
 
     #[test]
@@ -256,6 +480,165 @@ mod tests {
         if let Err(e) = result {
             assert!(e.to_string().contains("not found in test data"));
         }
+    }
+
+    fn table_ref(name: &str, columns: Vec<(&str, ColumnType)>) -> TableRef {
+        TableRef {
+            name: name.to_string(),
+            temporal_mode: None,
+            columns: columns
+                .into_iter()
+                .map(|(name, column_type)| ColumnDef {
+                    name: name.to_string(),
+                    column_type,
+                    nullable: Some(false),
+                    description: None,
+                })
+                .collect(),
+        }
+    }
+
+    #[test]
+    fn test_in_memory_loader_rejects_missing_required_columns() {
+        let mut loader = InMemoryDataLoader::new();
+        let rows = vec![HashMap::from([("id".to_string(), json!(1))])];
+        let frame = InMemoryDataLoader::build_lazyframe(rows).unwrap();
+        loader.add_table("orders".to_string(), frame);
+
+        let location = ResolvedLocation {
+            datasource_id: "test".to_string(),
+            path: None,
+            table: Some("orders".to_string()),
+            schema: None,
+            period_identifier: None,
+        };
+
+        let result = loader.load(
+            &location,
+            &table_ref(
+                "orders",
+                vec![("id", ColumnType::Integer), ("value", ColumnType::Integer)],
+            ),
+        );
+
+        let error = match result {
+            Ok(_) => panic!("expected missing column validation error"),
+            Err(error) => error.to_string(),
+        };
+        assert!(error.contains("missing required columns"));
+        assert!(error.contains("value"));
+    }
+
+    #[test]
+    fn test_in_memory_loader_rejects_unexpected_non_system_columns() {
+        let mut loader = InMemoryDataLoader::new();
+        let rows = vec![HashMap::from([
+            ("id".to_string(), json!(1)),
+            ("rogue".to_string(), json!("x")),
+        ])];
+        let frame = InMemoryDataLoader::build_lazyframe(rows).unwrap();
+        loader.add_table("orders".to_string(), frame);
+
+        let location = ResolvedLocation {
+            datasource_id: "test".to_string(),
+            path: None,
+            table: Some("orders".to_string()),
+            schema: None,
+            period_identifier: None,
+        };
+
+        let result = loader.load(
+            &location,
+            &table_ref("orders", vec![("id", ColumnType::Integer)]),
+        );
+
+        let error = match result {
+            Ok(_) => panic!("expected unexpected column validation error"),
+            Err(error) => error.to_string(),
+        };
+        assert!(error.contains("unexpected columns"));
+        assert!(error.contains("rogue"));
+    }
+
+    #[test]
+    fn test_in_memory_loader_rejects_type_mismatch() {
+        let mut loader = InMemoryDataLoader::new();
+        let rows = vec![HashMap::from([("id".to_string(), json!("not-an-integer"))])];
+        let frame = InMemoryDataLoader::build_lazyframe(rows).unwrap();
+        loader.add_table("orders".to_string(), frame);
+
+        let location = ResolvedLocation {
+            datasource_id: "test".to_string(),
+            path: None,
+            table: Some("orders".to_string()),
+            schema: None,
+            period_identifier: None,
+        };
+
+        let frame = loader
+            .load(
+                &location,
+                &table_ref("orders", vec![("id", ColumnType::Integer)]),
+            )
+            .expect("schema checks should remain lazy until collect");
+
+        let error = frame
+            .collect()
+            .expect_err("expected cast failure at collect boundary")
+            .to_string();
+        assert!(error.contains("conversion") || error.contains("cast") || error.contains("strict"));
+    }
+
+    #[test]
+    fn test_in_memory_loader_accepts_lazy_cast_when_collect_succeeds() {
+        let mut loader = InMemoryDataLoader::new();
+        let rows = vec![HashMap::from([("id".to_string(), json!(1))])];
+        let frame = InMemoryDataLoader::build_lazyframe(rows).unwrap();
+        loader.add_table("orders".to_string(), frame);
+
+        let location = ResolvedLocation {
+            datasource_id: "test".to_string(),
+            path: None,
+            table: Some("orders".to_string()),
+            schema: None,
+            period_identifier: None,
+        };
+
+        let frame = loader
+            .load(
+                &location,
+                &table_ref("orders", vec![("id", ColumnType::Integer)]),
+            )
+            .expect("load should succeed lazily");
+
+        let collected = frame.collect().expect("collect should succeed");
+        assert_eq!(collected.height(), 1);
+        assert_eq!(collected.column("id").unwrap().dtype(), &DataType::Int64);
+    }
+
+    #[test]
+    fn test_in_memory_loader_allows_system_metadata_columns() {
+        let mut loader = InMemoryDataLoader::new();
+        let rows = vec![HashMap::from([
+            ("id".to_string(), json!(1)),
+            ("_period".to_string(), json!("2026-01")),
+        ])];
+        let frame = InMemoryDataLoader::build_lazyframe(rows).unwrap();
+        loader.add_table("orders".to_string(), frame);
+
+        let location = ResolvedLocation {
+            datasource_id: "test".to_string(),
+            path: None,
+            table: Some("orders".to_string()),
+            schema: None,
+            period_identifier: None,
+        };
+
+        let result = loader.load(
+            &location,
+            &table_ref("orders", vec![("id", ColumnType::Integer)]),
+        );
+        assert!(result.is_ok());
     }
 
     /// T104: Integration test for external CSV file loading

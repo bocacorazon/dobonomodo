@@ -1,6 +1,6 @@
 use anyhow::{bail, Result};
 use clap::Parser;
-use dobo_core::model::{SuiteResult, TestResult, TestStatus};
+use dobo_core::model::{ErrorType, SuiteResult, TestErrorDetail, TestResult, TestStatus};
 use std::path::{Path, PathBuf};
 
 use crate::harness::{
@@ -62,10 +62,29 @@ impl TestCommand {
         let output_format = self.output_format()?;
 
         // Parse scenario
-        let scenario = parse_scenario(scenario_path)?;
+        let scenario = match parse_scenario(scenario_path) {
+            Ok(scenario) => scenario,
+            Err(error) => {
+                let result = build_error_result(
+                    scenario_path.display().to_string(),
+                    ErrorType::ParseError,
+                    error,
+                );
+                self.report_single(&result, output_format)?;
+                return Ok(2);
+            }
+        };
 
         // Execute scenario
-        let result = execute_scenario_with_base_dir(&scenario, scenario_path.parent())?;
+        let result = match execute_scenario_with_base_dir(&scenario, scenario_path.parent()) {
+            Ok(result) => result,
+            Err(error) => {
+                let result =
+                    build_error_result(scenario.name.clone(), ErrorType::ExecutionError, error);
+                self.report_single(&result, output_format)?;
+                return Ok(2);
+            }
+        };
 
         // Report result
         self.report_single(&result, output_format)?;
@@ -94,12 +113,14 @@ impl TestCommand {
             return Ok(2);
         }
 
-        println!(
-            "Discovered {} scenarios in: {}",
-            scenarios.len(),
-            suite_path.display()
-        );
-        println!();
+        if should_print_discovery_banner(output_format) {
+            println!(
+                "Discovered {} scenarios in: {}",
+                scenarios.len(),
+                suite_path.display()
+            );
+            println!();
+        }
 
         // Execute suite
         let suite_result = run_suite(&scenarios)?;
@@ -176,6 +197,30 @@ impl TestCommand {
     }
 }
 
+fn should_print_discovery_banner(output_format: OutputFormat) -> bool {
+    matches!(output_format, OutputFormat::Human)
+}
+
+fn build_error_result(
+    scenario_name: String,
+    error_type: ErrorType,
+    error: anyhow::Error,
+) -> TestResult {
+    TestResult {
+        scenario_name,
+        status: TestStatus::Error,
+        warnings: vec![],
+        data_mismatches: vec![],
+        trace_mismatches: vec![],
+        error: Some(TestErrorDetail {
+            error_type,
+            message: error.to_string(),
+            details: Some(format!("{:?}", error)),
+        }),
+        actual_snapshot: None,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -217,6 +262,13 @@ mod tests {
             ExecutionTarget::Single(path) => assert_eq!(path, scenario.as_path()),
             ExecutionTarget::Suite(_) => panic!("expected single target"),
         }
+    }
+
+    #[test]
+    fn discovery_banner_is_only_for_human_output() {
+        assert!(should_print_discovery_banner(OutputFormat::Human));
+        assert!(!should_print_discovery_banner(OutputFormat::Json));
+        assert!(!should_print_discovery_banner(OutputFormat::Junit));
     }
 
     #[test]
@@ -377,6 +429,135 @@ config:
             verbose: false,
             no_snapshot: true,
             output: "human".to_string(),
+        };
+
+        let exit_code = command.execute().unwrap();
+        assert_eq!(exit_code, 1);
+    }
+
+    #[test]
+    fn execute_single_missing_scenario_file_returns_exit_code_2() {
+        let temp_dir = tempdir().unwrap();
+        let scenario_path = temp_dir.path().join("missing.yaml");
+
+        let command = TestCommand {
+            scenario_path: Some(scenario_path),
+            suite: None,
+            verbose: false,
+            no_snapshot: true,
+            output: "human".to_string(),
+        };
+
+        let exit_code = command.execute().unwrap();
+        assert_eq!(exit_code, 2);
+    }
+
+    #[test]
+    fn execute_single_malformed_scenario_file_returns_exit_code_2() {
+        let temp_dir = tempdir().unwrap();
+        let scenario_path = temp_dir.path().join("invalid.yaml");
+        std::fs::write(&scenario_path, "name: [\n").unwrap();
+
+        let command = TestCommand {
+            scenario_path: Some(scenario_path),
+            suite: None,
+            verbose: false,
+            no_snapshot: true,
+            output: "human".to_string(),
+        };
+
+        let exit_code = command.execute().unwrap();
+        assert_eq!(exit_code, 2);
+    }
+
+    #[test]
+    fn execute_single_with_json_output_returns_exit_code_0() {
+        let temp_dir = tempdir().unwrap();
+        let scenario_path = temp_dir.path().join("harness-self-test.yaml");
+        let workspace_root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("..")
+            .join("..");
+        let source_fixture = workspace_root.join("tests/scenarios/harness-self-test.yaml");
+        fs::copy(source_fixture, &scenario_path).unwrap();
+
+        let command = TestCommand {
+            scenario_path: Some(scenario_path),
+            suite: None,
+            verbose: false,
+            no_snapshot: true,
+            output: "json".to_string(),
+        };
+
+        let exit_code = command.execute().unwrap();
+        assert_eq!(exit_code, 0);
+    }
+
+    #[test]
+    fn execute_single_with_junit_output_returns_exit_code_0() {
+        let temp_dir = tempdir().unwrap();
+        let scenario_path = temp_dir.path().join("harness-self-test.yaml");
+        let workspace_root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("..")
+            .join("..");
+        let source_fixture = workspace_root.join("tests/scenarios/harness-self-test.yaml");
+        fs::copy(source_fixture, &scenario_path).unwrap();
+
+        let command = TestCommand {
+            scenario_path: Some(scenario_path),
+            suite: None,
+            verbose: false,
+            no_snapshot: true,
+            output: "junit".to_string(),
+        };
+
+        let exit_code = command.execute().unwrap();
+        assert_eq!(exit_code, 0);
+    }
+
+    #[test]
+    fn execute_suite_with_json_output_returns_failure_exit_code() {
+        let temp_dir = tempdir().unwrap();
+        let suite_dir = temp_dir.path().join("suite");
+        fs::create_dir_all(&suite_dir).unwrap();
+
+        let workspace_root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("..")
+            .join("..");
+        let source_fixture = workspace_root.join("tests/scenarios/exact-match-test.yaml");
+        let copied_fixture = suite_dir.join("exact-match-test.yaml");
+        fs::copy(source_fixture, &copied_fixture).unwrap();
+
+        let command = TestCommand {
+            scenario_path: None,
+            suite: Some(suite_dir),
+            verbose: false,
+            no_snapshot: true,
+            output: "json".to_string(),
+        };
+
+        let exit_code = command.execute().unwrap();
+        assert_eq!(exit_code, 1);
+    }
+
+    #[test]
+    fn execute_suite_with_junit_output_returns_failure_exit_code() {
+        let temp_dir = tempdir().unwrap();
+        let suite_dir = temp_dir.path().join("suite");
+        fs::create_dir_all(&suite_dir).unwrap();
+
+        let workspace_root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("..")
+            .join("..");
+        let source_fixture = workspace_root.join("tests/scenarios/exact-match-test.yaml");
+        let copied_fixture = suite_dir.join("exact-match-test.yaml");
+        fs::copy(source_fixture, &copied_fixture).unwrap();
+
+        let command = TestCommand {
+            scenario_path: None,
+            suite: Some(suite_dir),
+            verbose: false,
+            no_snapshot: true,
+            output: "junit".to_string(),
         };
 
         let exit_code = command.execute().unwrap();
