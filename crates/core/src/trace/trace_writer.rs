@@ -2,7 +2,6 @@ use thiserror::Error;
 use uuid::Uuid;
 
 use crate::trace::types::TraceEvent;
-use crate::Result;
 
 #[derive(Debug, Error, Clone, PartialEq, Eq)]
 pub enum TraceWriteError {
@@ -11,5 +10,5 @@ pub enum TraceWriteError {
 }
 
 pub trait TraceWriter {
-    fn write_events(&self, run_id: &Uuid, events: &[TraceEvent]) -> Result<(), TraceWriteError>;
+    fn write_events(&self, run_id: &Uuid, events: &[TraceEvent]) -> std::result::Result<(), TraceWriteError>;
 }

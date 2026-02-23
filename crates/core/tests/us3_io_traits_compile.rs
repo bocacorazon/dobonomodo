@@ -150,6 +150,7 @@ fn data_loader_loads_expected_frame() {
         table: None,
         schema: None,
         period_identifier: None,
+        catalog_response: None,
     };
 
     let out = loader
@@ -169,6 +170,7 @@ fn data_loader_propagates_missing_location_error() {
         table: None,
         schema: None,
         period_identifier: None,
+        catalog_response: None,
     };
     let err = match loader.load(&location, &sample_table_ref()) {
         Err(err) => err,
