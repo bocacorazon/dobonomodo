@@ -115,7 +115,7 @@ Pipeline per spec:
    - lint
    - format check
 4. Run code review
-5. Run fix cycle (max 3 rounds)
+5. Run fix cycle (no fixed round limit)
 6. Commit and push if successful
 
 Copilot CLI command format (required):
@@ -129,7 +129,7 @@ Output protocol in worktree root:
 - `.agent-log`
 - `.agent-review`
 - `.agent-review-history/`
-- `.agent-escalation` (only for critical blockers)
+- `.agent-escalation` (only when review reports alternative fix paths requiring human choice)
 
 ### F) Orchestrator
 

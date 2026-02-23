@@ -8,7 +8,6 @@
 set -euo pipefail
 
 SPEC_ID="${1:?Usage: agent-run.sh <spec-id>}"
-MAX_REVIEW_ROUNDS="${MAX_REVIEW_ROUNDS:-3}"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
@@ -213,10 +212,24 @@ run_code_review() {
     return 0
 }
 
+review_requires_human_decision() {
+    # Preferred explicit marker from review prompt template.
+    if grep -Eqi '^HUMAN_DECISION_REQUIRED:[[:space:]]*yes([[:space:]]|$)' "$REVIEW_FILE" 2>/dev/null; then
+        return 0
+    fi
+
+    # Backward-compatible fallback for older review formats.
+    if grep -Eqi '(^|[[:space:]])(Alternatives|Options):|Option[[:space:]]*1|Option[[:space:]]*2|choose between|multiple valid approaches|trade-?off' "$REVIEW_FILE" 2>/dev/null; then
+        return 0
+    fi
+
+    return 1
+}
+
 REVIEW_ROUND=1
 REVIEW_CLEAN=false
 
-while [ "$REVIEW_ROUND" -le "$MAX_REVIEW_ROUNDS" ]; do
+while true; do
     if run_code_review "$REVIEW_ROUND"; then
         REVIEW_CLEAN=true
         log "  Code review clean (round $REVIEW_ROUND)"
@@ -225,31 +238,32 @@ while [ "$REVIEW_ROUND" -le "$MAX_REVIEW_ROUNDS" ]; do
 
     log "  Code review found CRITICAL issues (round $REVIEW_ROUND)"
 
-    if [ "$REVIEW_ROUND" -lt "$MAX_REVIEW_ROUNDS" ]; then
-        # --- Step 5: Fix cycle ---
-        log "  Entering fix cycle..."
-        copilot -p "Fix all CRITICAL and IMPORTANT issues identified in the code review. The review findings are in .agent-review. Address each finding and ensure quality gates still pass." --yolo --no-ask-user 2>&1 | tee -a "$LOG_FILE" || true
+    if review_requires_human_decision; then
+        log "  Human decision required: review contains alternative fix paths (round $REVIEW_ROUND)"
+        echo "Code review identified alternative fix approaches that require human choice. See .agent-review and .agent-review-history/." > "$ESCALATION_FILE"
+        set_status "NEEDS_HUMAN_REVIEW"
+        exit 0
+    fi
 
-        # Re-run quality gates after fixes
+    # --- Step 5: Fix cycle ---
+    log "  Entering fix cycle..."
+    copilot -p "Fix all CRITICAL and IMPORTANT issues identified in the code review. The review findings are in .agent-review. Address each finding and ensure quality gates still pass." --yolo --no-ask-user 2>&1 | tee -a "$LOG_FILE" || true
+
+    # Re-run quality gates after fixes
+    if ! run_quality_gates; then
+        log "Quality gates failed after review fixes, attempting auto-fix..."
+        copilot -p "Fix all cargo build errors, test failures, clippy warnings, and formatting issues." --yolo --no-ask-user 2>&1 | tee -a "$LOG_FILE" || true
         if ! run_quality_gates; then
-            log "Quality gates failed after review fixes, attempting auto-fix..."
-            copilot -p "Fix all cargo build errors, test failures, clippy warnings, and formatting issues." --yolo --no-ask-user 2>&1 | tee -a "$LOG_FILE" || true
-            if ! run_quality_gates; then
-                log "Quality gates still failing"
-                set_status "FAILED"
-                exit 1
-            fi
+            log "Quality gates still failing"
+            set_status "FAILED"
+            exit 1
         fi
     fi
 
     REVIEW_ROUND=$((REVIEW_ROUND + 1))
 done
 
-if [ "$REVIEW_CLEAN" = false ]; then
-    log "CRITICAL findings persist after $MAX_REVIEW_ROUNDS review rounds"
-    echo "CRITICAL code review findings persist after $MAX_REVIEW_ROUNDS automated fix rounds. Human review required." > "$ESCALATION_FILE"
-    set_status "NEEDS_HUMAN_REVIEW"
-else
+if [ "$REVIEW_CLEAN" = true ]; then
     set_status "SUCCESS"
 fi
 

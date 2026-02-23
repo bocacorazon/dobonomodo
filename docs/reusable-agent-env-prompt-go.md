@@ -124,7 +124,7 @@ Per-spec flow:
    - `gofmt -l .` (must return no files)
    - if repo uses golangci-lint config, run `golangci-lint run`
 4. Run code review
-5. Run auto-fix cycle (max 3 rounds)
+5. Run auto-fix cycle (no fixed round limit)
 6. Commit and push on success
 
 Copilot CLI command format (required):
@@ -136,7 +136,7 @@ Status artifacts:
 - `.agent-log`
 - `.agent-review`
 - `.agent-review-history/`
-- `.agent-escalation` (only for blockers)
+- `.agent-escalation` (only when review reports alternative fix paths requiring human choice)
 
 ### F) Orchestrator
 
@@ -218,4 +218,3 @@ If blocked:
 - describe exact blocker
 - give one concrete next command for me to run
 ```
-

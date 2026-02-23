@@ -18,12 +18,15 @@ For each finding, classify as:
 - **IMPORTANT**: Should fix — logic issues, missing edge cases, incomplete error handling
 - **MINOR**: Nice to have — better abstractions, documentation improvements
 
+Only set `HUMAN_DECISION_REQUIRED: yes` when there are multiple valid fix approaches and a human must choose among alternatives. If there is a clear technical fix, set it to `no` and provide the fix directly.
+
 Output format:
 ```
 ## Review Summary
 - CRITICAL: <count>
 - IMPORTANT: <count>
 - MINOR: <count>
+HUMAN_DECISION_REQUIRED: <yes|no>
 
 ## Findings
 

@@ -1,5 +1,6 @@
 pub mod dsl;
 pub mod engine;
+pub mod error;
 pub mod model;
 pub mod resolver;
 pub mod trace;

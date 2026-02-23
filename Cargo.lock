@@ -347,7 +347,6 @@ dependencies = [
 name = "dobo-core"
 version = "0.1.0"
 dependencies = [
- "anyhow",
  "chrono",
  "lazy_static",
  "pest",

@@ -2,6 +2,7 @@ use polars::prelude::{DataFrame, LazyFrame};
 use thiserror::Error;
 
 use crate::model::{OutputDestination, ResolvedLocation, TableRef};
+use crate::Result;
 
 #[derive(Debug, Error, Clone, PartialEq, Eq)]
 pub enum DataLoaderError {
