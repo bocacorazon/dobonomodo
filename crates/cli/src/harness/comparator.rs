@@ -169,14 +169,34 @@ fn compare_exact(
 fn compare_subset(
     actual: &DataFrame,
     expected: &DataFrame,
-    _order_sensitive: bool,
+    order_sensitive: bool,
 ) -> Result<Vec<DataMismatch>> {
+    let (mut expected_unmatched, mut actual_unmatched) = if order_sensitive {
+        split_unmatched_rows_ordered_subset(
+            dataframe_to_rows(expected)?,
+            dataframe_to_rows(actual)?,
+        )
+    } else {
+        split_unmatched_rows(dataframe_to_rows(expected)?, dataframe_to_rows(actual)?)
+    };
+
     let mut mismatches = Vec::new();
 
-    // Only find missing rows (expected rows that don't exist in actual)
-    // Note: subset mode is inherently order-insensitive
-    let missing_rows = find_missing_rows(expected, actual)?;
-    for row in missing_rows {
+    while let Some((expected_idx, actual_idx, differing_columns)) =
+        best_non_exact_value_mismatch_pair(&expected_unmatched, &actual_unmatched)
+    {
+        let expected_row = expected_unmatched.swap_remove(expected_idx);
+        let actual_row = actual_unmatched.swap_remove(actual_idx);
+
+        mismatches.push(DataMismatch {
+            mismatch_type: MismatchType::ValueMismatch,
+            expected: Some(expected_row),
+            actual: Some(actual_row),
+            differing_columns,
+        });
+    }
+
+    for row in expected_unmatched {
         mismatches.push(DataMismatch {
             mismatch_type: MismatchType::MissingRow,
             expected: Some(row),
@@ -186,13 +206,6 @@ fn compare_subset(
     }
 
     Ok(mismatches)
-}
-
-/// Find rows in left that are not in right (using simple row comparison)
-fn find_missing_rows(left: &DataFrame, right: &DataFrame) -> Result<Rows> {
-    let (left_unmatched, _) =
-        split_unmatched_rows(dataframe_to_rows(left)?, dataframe_to_rows(right)?);
-    Ok(left_unmatched)
 }
 
 fn split_unmatched_rows(left_rows: Rows, right_rows: Rows) -> (Rows, Rows) {
@@ -222,6 +235,32 @@ fn split_unmatched_rows(left_rows: Rows, right_rows: Rows) -> (Rows, Rows) {
     (left_unmatched, right_unmatched)
 }
 
+fn split_unmatched_rows_ordered_subset(expected_rows: Rows, actual_rows: Rows) -> (Rows, Rows) {
+    let mut actual_consumed = vec![false; actual_rows.len()];
+    let mut expected_unmatched = Vec::new();
+    let mut search_start = 0;
+
+    for expected_row in expected_rows {
+        let matched_idx = (search_start..actual_rows.len())
+            .find(|idx| rows_equal(&expected_row, &actual_rows[*idx]));
+
+        if let Some(idx) = matched_idx {
+            actual_consumed[idx] = true;
+            search_start = idx + 1;
+        } else {
+            expected_unmatched.push(expected_row);
+        }
+    }
+
+    let actual_unmatched = actual_rows
+        .into_iter()
+        .enumerate()
+        .filter_map(|(idx, row)| (!actual_consumed[idx]).then_some(row))
+        .collect();
+
+    (expected_unmatched, actual_unmatched)
+}
+
 fn best_value_mismatch_pair(
     expected_rows: &[Row],
     actual_rows: &[Row],
@@ -242,6 +281,31 @@ fn best_value_mismatch_pair(
     }
 
     best_pair.expect("best pair exists when both row lists are non-empty")
+}
+
+fn best_non_exact_value_mismatch_pair(
+    expected_rows: &[Row],
+    actual_rows: &[Row],
+) -> Option<(usize, usize, Vec<String>)> {
+    let mut best_pair: Option<(usize, usize, Vec<String>)> = None;
+
+    for (expected_idx, expected_row) in expected_rows.iter().enumerate() {
+        for (actual_idx, actual_row) in actual_rows.iter().enumerate() {
+            let differing_columns = find_differing_columns(expected_row, actual_row);
+            if differing_columns.is_empty() {
+                continue;
+            }
+
+            match &best_pair {
+                Some((_, _, current_diff)) if current_diff.len() <= differing_columns.len() => {}
+                _ => {
+                    best_pair = Some((expected_idx, actual_idx, differing_columns));
+                }
+            }
+        }
+    }
+
+    best_pair
 }
 
 /// Convert DataFrame to vector of row HashMaps
@@ -597,7 +661,7 @@ mod tests {
     }
 
     #[test]
-    fn subset_mode_ignores_order_sensitive_flag() {
+    fn subset_mode_honors_order_sensitive_flag() {
         let actual = df! {
             "id" => &[2i64, 1i64],
             "value" => &[20i64, 10i64],
@@ -614,8 +678,29 @@ mod tests {
         let order_insensitive =
             compare_output(&actual, &expected, MatchMode::Subset, true, false).unwrap();
 
-        assert_eq!(order_sensitive.len(), order_insensitive.len());
-        assert!(order_sensitive.is_empty());
+        assert_eq!(order_insensitive.len(), 0);
+        assert_eq!(order_sensitive.len(), 1);
+        assert_eq!(order_sensitive[0].mismatch_type, MismatchType::MissingRow);
+    }
+
+    #[test]
+    fn subset_mode_reports_value_mismatch_with_differing_columns() {
+        let actual = df! {
+            "id" => &[1i64],
+            "value" => &[20i64],
+        }
+        .unwrap();
+        let expected = df! {
+            "id" => &[1i64],
+            "value" => &[10i64],
+        }
+        .unwrap();
+
+        let mismatches =
+            compare_output(&actual, &expected, MatchMode::Subset, true, false).unwrap();
+        assert_eq!(mismatches.len(), 1);
+        assert_eq!(mismatches[0].mismatch_type, MismatchType::ValueMismatch);
+        assert_eq!(mismatches[0].differing_columns, vec!["value".to_string()]);
     }
 
     #[test]

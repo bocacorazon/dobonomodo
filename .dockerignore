@@ -1,6 +1,7 @@
 target/
 debug/
 release/
+node_modules/
 .git/
 .gitignore
 Dockerfile*

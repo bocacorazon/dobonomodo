@@ -21,7 +21,7 @@ pub fn report_result(result: &TestResult, verbose: bool) {
 
             if !result.data_mismatches.is_empty() {
                 println!("Data Mismatches ({}):", result.data_mismatches.len());
-                for mismatch in &result.data_mismatches {
+                for (index, mismatch) in result.data_mismatches.iter().enumerate() {
                     match mismatch.mismatch_type {
                         dobo_core::model::MismatchType::MissingRow => {
                             if let Some(expected) = &mismatch.expected {
@@ -50,15 +50,14 @@ pub fn report_result(result: &TestResult, verbose: bool) {
                         }
                     }
 
-                    if !verbose {
-                        // Only show first few mismatches in non-verbose mode
-                        if result.data_mismatches.len() > 5 {
-                            println!(
-                                "  ... and {} more mismatches (use --verbose to see all)",
-                                result.data_mismatches.len() - 5
-                            );
-                            break;
-                        }
+                    if let Some(remaining) =
+                        non_verbose_mismatch_remaining(result.data_mismatches.len(), index, verbose)
+                    {
+                        println!(
+                            "  ... and {} more mismatches (use --verbose to see all)",
+                            remaining
+                        );
+                        break;
                     }
                 }
             }
@@ -98,6 +97,14 @@ pub fn report_result(result: &TestResult, verbose: bool) {
         for warning in &result.warnings {
             println!("  ⚠ {}", warning);
         }
+    }
+}
+
+fn non_verbose_mismatch_remaining(total: usize, index: usize, verbose: bool) -> Option<usize> {
+    if verbose || total <= 5 || index < 4 {
+        None
+    } else {
+        Some(total - 5)
     }
 }
 
@@ -362,5 +369,14 @@ mod tests {
         let expected_path = temp.path().join(".snapshots").join("escape-actual.yaml");
         assert!(expected_path.exists());
         assert!(!temp.path().join("..").join("escape-actual.yaml").exists());
+    }
+
+    #[test]
+    fn non_verbose_mismatch_tail_is_emitted_after_fifth_item() {
+        assert_eq!(non_verbose_mismatch_remaining(8, 0, false), None);
+        assert_eq!(non_verbose_mismatch_remaining(8, 3, false), None);
+        assert_eq!(non_verbose_mismatch_remaining(8, 4, false), Some(3));
+        assert_eq!(non_verbose_mismatch_remaining(5, 4, false), None);
+        assert_eq!(non_verbose_mismatch_remaining(8, 4, true), None);
     }
 }
