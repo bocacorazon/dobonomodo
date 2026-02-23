@@ -2,7 +2,6 @@ use polars::prelude::{DataFrame, LazyFrame};
 use thiserror::Error;
 
 use crate::model::{OutputDestination, ResolvedLocation, TableRef};
-use crate::Result;
 
 #[derive(Debug, Error, Clone, PartialEq, Eq)]
 pub enum DataLoaderError {
@@ -21,7 +20,7 @@ pub trait DataLoader {
         &self,
         location: &ResolvedLocation,
         schema: &TableRef,
-    ) -> Result<LazyFrame, DataLoaderError>;
+    ) -> std::result::Result<LazyFrame, DataLoaderError>;
 }
 
 pub trait OutputWriter {
@@ -29,5 +28,5 @@ pub trait OutputWriter {
         &self,
         frame: &DataFrame,
         destination: &OutputDestination,
-    ) -> Result<(), OutputWriterError>;
+    ) -> std::result::Result<(), OutputWriterError>;
 }

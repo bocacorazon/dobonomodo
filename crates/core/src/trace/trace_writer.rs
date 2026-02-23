@@ -2,7 +2,6 @@ use thiserror::Error;
 use uuid::Uuid;
 
 use crate::trace::types::TraceEvent;
-use crate::Result;
 
 #[derive(Debug, Error, Clone, PartialEq, Eq)]
 pub enum TraceWriteError {
