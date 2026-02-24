@@ -6,7 +6,9 @@ use dobo_core::model::{
     Materialization, OperationInstance, OperationKind, OutputDestination, Project, ProjectStatus,
     Visibility,
 };
-use dobo_core::{execute_pipeline, execute_pipeline_with_output_writer, OutputWriter};
+use dobo_core::{
+    execute_pipeline, execute_pipeline_with_output_writer, OutputWriter, OutputWriterError,
+};
 use polars::prelude::{Column, DataFrame};
 use serde_json::json;
 use uuid::Uuid;
@@ -139,7 +141,11 @@ struct RecordingWriter {
 }
 
 impl OutputWriter for RecordingWriter {
-    fn write(&self, frame: &DataFrame, destination: &OutputDestination) -> Result<()> {
+    fn write(
+        &self,
+        frame: &DataFrame,
+        destination: &OutputDestination,
+    ) -> std::result::Result<(), OutputWriterError> {
         let mut writes = self.writes.lock().expect("recording writer mutex poisoned");
         writes.push((
             frame.height(),

@@ -3,7 +3,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use anyhow::{Context, Result};
 use polars::prelude::{col, lit, DataFrame, IntoLazy, LazyFrame};
 
-use crate::engine::io_traits::OutputWriter;
+use crate::engine::io_traits::{OutputWriter, OutputWriterError};
 use crate::model::{
     DeleteOperationParams, OperationInstance, OperationKind, OutputOperationParams, Project,
 };
@@ -191,7 +191,7 @@ impl OutputWriter for NoopOutputWriter {
         &self,
         _frame: &DataFrame,
         _destination: &crate::model::OutputDestination,
-    ) -> Result<()> {
+    ) -> std::result::Result<(), OutputWriterError> {
         Ok(())
     }
 }

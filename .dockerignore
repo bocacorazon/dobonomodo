@@ -1,3 +1,7 @@
+target/
+**/target/
+debug/
+release/
 node_modules/
 .git/
 Dockerfile*
@@ -5,7 +9,6 @@ Dockerfile*
 *.log*
 .env*
 coverage/
-target/
 .cargo-target/
 dist/
 build/

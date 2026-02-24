@@ -13,6 +13,32 @@
       ]
     }
   },
+  "column_def": {
+    "name": "amount",
+    "type": "decimal",
+    "nullable": false
+  },
+  "table_ref": {
+    "name": "transactions",
+    "temporal_mode": "period",
+    "columns": [
+      { "name": "amount", "type": "decimal", "nullable": false }
+    ]
+  },
+  "lookup_def": {
+    "alias": "account_lookup",
+    "target": {
+      "type": "table",
+      "name": "accounts",
+      "temporal_mode": "period",
+      "columns": [
+        { "name": "account_id", "type": "string", "nullable": false }
+      ]
+    },
+    "join_conditions": [
+      { "source_column": "account_id", "target_column": "account_id" }
+    ]
+  },
   "project": {
     "id": "00000000-0000-0000-0000-000000000102",
     "name": "P",
@@ -35,6 +61,34 @@
       }
     ]
   },
+  "operation_instance": {
+    "order": 2,
+    "type": "update",
+    "alias": "normalize_amount",
+    "parameters": {
+      "expression": "amount * 1.0"
+    }
+  },
+  "resolver_snapshot": {
+    "dataset_id": "00000000-0000-0000-0000-000000000101",
+    "resolver_id": "test-resolver",
+    "resolver_version": 1
+  },
+  "project_snapshot": {
+    "input_dataset_id": "00000000-0000-0000-0000-000000000101",
+    "input_dataset_version": 1,
+    "materialization": "eager",
+    "operations": [
+      { "order": 1, "type": "output", "parameters": {} }
+    ],
+    "resolver_snapshots": [
+      {
+        "dataset_id": "00000000-0000-0000-0000-000000000101",
+        "resolver_id": "test-resolver",
+        "resolver_version": 1
+      }
+    ]
+  },
   "run": {
     "id": "00000000-0000-0000-0000-000000000103",
     "project_id": "00000000-0000-0000-0000-000000000102",
@@ -54,7 +108,13 @@
           }
         }
       ],
-      "resolver_snapshots": []
+      "resolver_snapshots": [
+        {
+          "dataset_id": "00000000-0000-0000-0000-000000000101",
+          "resolver_id": "test-resolver",
+          "resolver_version": 1
+        }
+      ]
     },
     "period_ids": ["00000000-0000-0000-0000-000000000104"],
     "status": "queued",
@@ -77,6 +137,42 @@
         }
       }
     ]
+  },
+  "resolution_rule": {
+    "name": "from-catalog",
+    "when": "table_name == 'transactions'",
+    "data_level": "any",
+    "strategy": {
+      "type": "catalog",
+      "endpoint": "https://catalog.example.invalid/v1/resolve",
+      "method": "GET",
+      "params": {
+        "table": "transactions"
+      },
+      "headers": {
+        "x-request-id": "req-1"
+      }
+    }
+  },
+  "resolution_strategy": {
+    "type": "catalog",
+    "endpoint": "https://catalog.example.invalid/v1/resolve",
+    "method": "GET",
+    "params": {
+      "table": "transactions"
+    },
+    "headers": {
+      "x-request-id": "req-1"
+    }
+  },
+  "resolved_location": {
+    "datasource_id": "ds",
+    "period_identifier": "2026-01",
+    "catalog_response": {
+      "location": {
+        "path": "s3://bucket/transactions/2026-01.parquet"
+      }
+    }
   },
   "calendar": {
     "id": "00000000-0000-0000-0000-000000000105",

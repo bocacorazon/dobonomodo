@@ -1,7 +1,34 @@
+//! DSL Parser & Expression Compiler
+//!
+//! This module provides parsing, validation, and compilation functionality for
+//! the DobONoMoDo expression DSL. It transforms expression strings into validated
+//! Abstract Syntax Trees (ASTs) and compiles them into Polars `Expr` objects.
+
 use std::collections::BTreeMap;
 
 use anyhow::{bail, Result};
 use polars::prelude::{col, lit, Expr};
+
+pub mod ast;
+pub mod compiler;
+pub mod context;
+pub mod error;
+pub mod interpolation;
+pub mod parser;
+pub mod types;
+pub mod validation;
+
+pub use ast::*;
+pub use compiler::{
+    compile_expression, compile_expression_with_source, compile_with_interpolation,
+    CompiledExpression,
+};
+pub use context::*;
+pub use error::*;
+pub use interpolation::interpolate_selectors;
+pub use parser::{parse_expression, parse_expression_with_span, Span};
+pub use types::*;
+pub use validation::{infer_type, resolve_column, validate_expression};
 
 const COMPARISON_OPERATORS: [&str; 7] = [">=", "<=", "!=", "==", "=", ">", "<"];
 
