@@ -1,0 +1,18 @@
+name: delete_output_visibility
+input_rows:
+  - _row_id: r1
+    _deleted: false
+    _modified_at: 1
+    amount: 0
+  - _row_id: r2
+    _deleted: false
+    _modified_at: 1
+    amount: 100
+  - _row_id: r3
+    _deleted: false
+    _modified_at: 1
+    amount: 200
+delete_selector: "amount = 0"
+expected_default_count: 2
+expected_include_deleted_count: 3
+
