@@ -87,6 +87,7 @@ where
         ExpressionInput::String(source) => Expression::from(source),
         ExpressionInput::Structured { source } => Expression::from(source),
     }))
+}
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
 pub struct DeleteOperationParams {
     #[serde(default)]
