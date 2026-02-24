@@ -1,0 +1,105 @@
+openapi: 3.0.3
+info:
+  title: Delete Operation Contract
+  version: 1.0.0
+  description: API contract for configuring and validating delete operations in a Project pipeline.
+paths:
+  /v1/projects/{projectId}/operations:
+    post:
+      summary: Create operation
+      description: Adds a new operation to a project sequence.
+      parameters:
+        - in: path
+          name: projectId
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OperationCreateRequest'
+      responses:
+        '201':
+          description: Operation created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OperationInstance'
+        '400':
+          description: Validation error
+  /v1/projects/{projectId}/validate:
+    post:
+      summary: Validate project pipeline
+      description: Validates selectors and operation semantics before execution.
+      parameters:
+        - in: path
+          name: projectId
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Validation result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationResult'
+components:
+  schemas:
+    OperationCreateRequest:
+      type: object
+      required: [order, type, parameters]
+      properties:
+        order:
+          type: integer
+          minimum: 1
+        type:
+          type: string
+          enum: [update, aggregate, append, output, delete]
+        alias:
+          type: string
+        parameters:
+          oneOf:
+            - $ref: '#/components/schemas/DeleteOperationParams'
+            - type: object
+      additionalProperties: false
+    DeleteOperationParams:
+      type: object
+      description: No selector means delete all active rows.
+      properties:
+        selector:
+          type: string
+          minLength: 1
+      additionalProperties: false
+    OperationInstance:
+      type: object
+      required: [order, type, parameters]
+      properties:
+        order:
+          type: integer
+        type:
+          type: string
+        alias:
+          type: string
+        parameters:
+          type: object
+    ValidationResult:
+      type: object
+      required: [valid, failures]
+      properties:
+        valid:
+          type: boolean
+        failures:
+          type: array
+          items:
+            type: object
+            required: [code, message]
+            properties:
+              code:
+                type: string
+              message:
+                type: string

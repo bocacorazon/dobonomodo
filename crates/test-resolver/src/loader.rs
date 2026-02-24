@@ -717,10 +717,7 @@ mod tests {
         let rows = vec![HashMap::from([
             ("id".to_string(), json!(1)),
             ("order_date".to_string(), json!("2026-01-15")),
-            (
-                "captured_at".to_string(),
-                json!("2026-01-15T10:30:00"),
-            ),
+            ("captured_at".to_string(), json!("2026-01-15T10:30:00")),
         ])];
         let frame = InMemoryDataLoader::build_lazyframe(rows).unwrap();
         loader.add_table("orders".to_string(), frame);
@@ -749,7 +746,10 @@ mod tests {
             .expect("load should succeed lazily");
 
         let collected = frame.collect().expect("collect should succeed");
-        assert_eq!(collected.column("order_date").unwrap().dtype(), &DataType::Date);
+        assert_eq!(
+            collected.column("order_date").unwrap().dtype(),
+            &DataType::Date
+        );
         assert_eq!(
             collected.column("captured_at").unwrap().dtype(),
             &DataType::Datetime(TimeUnit::Milliseconds, None)

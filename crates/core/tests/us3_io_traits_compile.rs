@@ -336,7 +336,11 @@ fn sample_project(dataset_id: Uuid) -> Project {
             order: 1,
             kind: dobo_core::model::OperationKind::Output,
             alias: None,
-            parameters: serde_json::json!({}),
+            parameters: serde_json::json!({
+                "destination": {
+                    "destination_type": "memory"
+                }
+            }),
         }],
         selectors: BTreeMap::new(),
         resolver_overrides: BTreeMap::new(),

@@ -1269,7 +1269,11 @@ mod tests {
     #[test]
     fn file_input_cast_failure_is_classified_as_schema_validation_error() {
         let temp = TempDir::new().unwrap();
-        fs::write(temp.path().join("orders.csv"), "id,value,_period\nabc,10,2026-01\n").unwrap();
+        fs::write(
+            temp.path().join("orders.csv"),
+            "id,value,_period\nabc,10,2026-01\n",
+        )
+        .unwrap();
 
         let dataset = sample_dataset();
         let mut scenario = sample_scenario(dataset.clone());

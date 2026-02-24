@@ -325,3 +325,31 @@ arguments:
       table: "processed_orders"
     include_deleted: false
 ```
+
+### REST API examples (delete operation)
+
+```json
+{
+  "order": 4,
+  "type": "delete",
+  "alias": "remove_zero_amount",
+  "parameters": {
+    "selector": "orders.amount = 0"
+  }
+}
+```
+
+```json
+{
+  "order": 5,
+  "type": "output",
+  "alias": "archive_with_deleted",
+  "parameters": {
+    "destination": {
+      "datasource_id": "ds-archive",
+      "table": "orders_with_deletes"
+    },
+    "include_deleted": true
+  }
+}
+```
