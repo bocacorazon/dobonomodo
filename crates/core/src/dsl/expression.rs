@@ -10,6 +10,43 @@ enum ComparisonOp {
     Le,
 }
 
+/// Extracts all column names referenced in a selector expression string.
+///
+/// The selector can contain `AND` and `OR` logical operators (case-sensitive),
+/// and leaf comparisons of the form `column_name <op> value`.
+/// Column names are deduplicated so each name appears at most once.
+///
+/// Returns an error if the selector is empty or contains an invalid comparison.
+pub fn extract_selector_columns(selector: &str) -> Result<Vec<String>, String> {
+    let mut columns: Vec<String> = Vec::new();
+    collect_selector_columns(selector, &mut columns)?;
+    columns.sort();
+    columns.dedup();
+    Ok(columns)
+}
+
+fn collect_selector_columns(selector: &str, out: &mut Vec<String>) -> Result<(), String> {
+    let trimmed = selector.trim();
+    if trimmed.is_empty() {
+        return Err("source_selector cannot be empty".to_owned());
+    }
+
+    if let Some((lhs, rhs)) = split_logical(trimmed, " OR ") {
+        collect_selector_columns(lhs, out)?;
+        collect_selector_columns(rhs, out)?;
+        return Ok(());
+    }
+    if let Some((lhs, rhs)) = split_logical(trimmed, " AND ") {
+        collect_selector_columns(lhs, out)?;
+        collect_selector_columns(rhs, out)?;
+        return Ok(());
+    }
+
+    let (column, _, _) = parse_comparison(trimmed)?;
+    out.push(column.to_owned());
+    Ok(())
+}
+
 pub fn parse_source_selector(selector: &str) -> Result<Expr, String> {
     let trimmed = selector.trim();
     if trimmed.is_empty() {
