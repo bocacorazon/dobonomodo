@@ -54,9 +54,8 @@ fn test_ts07_column_projection_contract() {
 
     // Configure output operation with column projection
     let operation = OutputOperation {
-        destination: OutputDestination {
-            destination_type: "test".to_string(),
-            target: Some("gl_output.csv".to_string()),
+        destination: OutputDestination::Location {
+            path: "gl_output.csv".to_string(),
         },
         selector: None,
         columns: Some(vec![

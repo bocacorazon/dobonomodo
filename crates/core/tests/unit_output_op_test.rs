@@ -1,8 +1,10 @@
 use anyhow::{anyhow, Result};
 use dobo_core::engine::io_traits::OutputWriter;
 use dobo_core::engine::ops::output::{
-    execute_output, execute_output_with_registration_store, execute_output_with_registry,
-    extract_schema, ColumnType, OutputError, OutputOperation, TemporalMode,
+    execute_output, execute_output_with_registration_store,
+    execute_output_with_registration_store_and_warning_logger,
+    execute_output_with_registry, execute_output_with_registry_and_warning_logger, extract_schema,
+    ColumnType, OutputError, OutputOperation, OutputWarning, OutputWarningLogger, TemporalMode,
 };
 use dobo_core::model::{Dataset, OutputDestination, Project, Resolver, RunStatus};
 use dobo_core::{DatasetRegistrationStore, MetadataStore};
@@ -15,6 +17,23 @@ use uuid::Uuid;
 struct MockOutputWriter {
     fail_with: Option<String>,
     write_count: Mutex<usize>,
+}
+
+#[derive(Default)]
+struct CapturingWarningLogger {
+    warnings: Mutex<Vec<OutputWarning>>,
+}
+
+impl CapturingWarningLogger {
+    fn take(&self) -> Vec<OutputWarning> {
+        std::mem::take(&mut *self.warnings.lock().unwrap())
+    }
+}
+
+impl OutputWarningLogger for CapturingWarningLogger {
+    fn warn(&self, warning: OutputWarning) {
+        self.warnings.lock().unwrap().push(warning);
+    }
 }
 
 impl MockOutputWriter {
@@ -112,6 +131,14 @@ impl MetadataStore for NonRegisteringMetadataStore {
         Err(anyhow!("not used in tests"))
     }
 
+    fn get_dataset_by_name(&self, _name: &str) -> Result<Option<Dataset>> {
+        Err(anyhow!("registration lookup unavailable"))
+    }
+
+    fn register_dataset(&self, _dataset: Dataset) -> Result<Uuid> {
+        Err(anyhow!("registration backend unavailable"))
+    }
+
     fn get_project(&self, _id: &Uuid) -> Result<Project> {
         Err(anyhow!("not used in tests"))
     }
@@ -126,9 +153,8 @@ impl MetadataStore for NonRegisteringMetadataStore {
 }
 
 fn destination() -> OutputDestination {
-    OutputDestination {
-        destination_type: "test".to_string(),
-        target: Some("output.csv".to_string()),
+    OutputDestination::Location {
+        path: "output.csv".to_string(),
     }
 }
 
@@ -151,6 +177,31 @@ fn test_basic_output_all_rows_all_columns() {
     let result = execute_output(&df.lazy(), &operation, &writer, None).unwrap();
     assert_eq!(result.rows_written, 3);
     assert_eq!(result.columns_written, vec!["id", "name"]);
+    assert_eq!(writer.writes(), 1);
+}
+
+#[test]
+fn test_valid_table_destination_writes_successfully() {
+    let df = df! {
+        "id" => &[1, 2, 3],
+        "name" => &["A", "B", "C"],
+    }
+    .unwrap();
+    let writer = MockOutputWriter::ok();
+    let operation = OutputOperation {
+        destination: OutputDestination::Table {
+            datasource_id: "warehouse".to_string(),
+            table: "fact_output".to_string(),
+            schema: Some("finance".to_string()),
+        },
+        selector: None,
+        columns: None,
+        include_deleted: false,
+        register_as_dataset: None,
+    };
+
+    let result = execute_output(&df.lazy(), &operation, &writer, None).unwrap();
+    assert_eq!(result.rows_written, 3);
     assert_eq!(writer.writes(), 1);
 }
 
@@ -200,6 +251,27 @@ fn test_missing_columns_reports_available() {
         }
         other => panic!("expected ColumnProjectionError, got {other:?}"),
     }
+}
+
+#[test]
+fn test_empty_column_projection_fails_before_write() {
+    let df = df! {
+        "id" => &[1, 2, 3],
+        "name" => &["A", "B", "C"],
+    }
+    .unwrap();
+    let writer = MockOutputWriter::ok();
+    let operation = OutputOperation {
+        destination: destination(),
+        selector: None,
+        columns: Some(Vec::new()),
+        include_deleted: false,
+        register_as_dataset: None,
+    };
+
+    let error = execute_output(&df.lazy(), &operation, &writer, None).unwrap_err();
+    assert!(matches!(error, OutputError::EmptyColumnProjection));
+    assert_eq!(writer.writes(), 0);
 }
 
 #[test]
@@ -467,13 +539,88 @@ fn test_execute_output_with_registry_registration_failure_is_non_fatal() {
 }
 
 #[test]
+fn test_execute_output_with_registry_registration_failure_emits_warning() {
+    let df = df! { "id" => &[1, 2, 3] }.unwrap();
+    let writer = MockOutputWriter::ok();
+    let store = NonRegisteringMetadataStore;
+    let warning_logger = CapturingWarningLogger::default();
+    let operation = OutputOperation {
+        destination: destination(),
+        selector: None,
+        columns: None,
+        include_deleted: true,
+        register_as_dataset: Some("registered".to_string()),
+    };
+
+    let result = execute_output_with_registry_and_warning_logger(
+        &df.lazy(),
+        &operation,
+        &writer,
+        Some(&store),
+        &warning_logger,
+    )
+    .unwrap();
+    assert_eq!(result.dataset_id, None);
+
+    let warnings = warning_logger.take();
+    assert_eq!(warnings.len(), 1);
+    assert_eq!(warnings[0].code, "output.registration.failed");
+    assert_eq!(warnings[0].dataset_name, "registered");
+    assert_eq!(warnings[0].reason, "registration_backend_error");
+}
+
+struct FailingRegistrationStore;
+
+impl DatasetRegistrationStore for FailingRegistrationStore {
+    fn get_dataset_by_name(&self, _name: &str) -> Result<Option<Dataset>> {
+        Ok(None)
+    }
+
+    fn register_dataset(&self, _dataset: Dataset) -> Result<Uuid> {
+        Err(anyhow!("registration backend unavailable"))
+    }
+}
+
+#[test]
+fn test_execute_output_with_registration_store_failure_emits_warning() {
+    let df = df! { "id" => &[1, 2, 3] }.unwrap();
+    let writer = MockOutputWriter::ok();
+    let warning_logger = CapturingWarningLogger::default();
+    let operation = OutputOperation {
+        destination: destination(),
+        selector: None,
+        columns: None,
+        include_deleted: true,
+        register_as_dataset: Some("registered".to_string()),
+    };
+
+    let result = execute_output_with_registration_store_and_warning_logger(
+        &df.lazy(),
+        &operation,
+        &writer,
+        None,
+        Some(&FailingRegistrationStore),
+        &warning_logger,
+    )
+    .unwrap();
+    assert_eq!(result.dataset_id, None);
+
+    let warnings = warning_logger.take();
+    assert_eq!(warnings.len(), 1);
+    assert_eq!(warnings[0].code, "output.registration.failed");
+    assert_eq!(warnings[0].dataset_name, "registered");
+    assert_eq!(warnings[0].reason, "registration_backend_error");
+}
+
+#[test]
 fn test_invalid_destination_type_fails_before_write() {
     let df = df! { "id" => &[1, 2, 3] }.unwrap();
     let writer = MockOutputWriter::ok();
     let operation = OutputOperation {
-        destination: OutputDestination {
-            destination_type: "   ".to_string(),
-            target: Some("out.csv".to_string()),
+        destination: OutputDestination::Table {
+            datasource_id: "   ".to_string(),
+            table: "out_table".to_string(),
+            schema: None,
         },
         selector: None,
         columns: None,
@@ -491,9 +638,29 @@ fn test_missing_destination_target_fails_before_write() {
     let df = df! { "id" => &[1, 2, 3] }.unwrap();
     let writer = MockOutputWriter::ok();
     let operation = OutputOperation {
-        destination: OutputDestination {
-            destination_type: "file".to_string(),
-            target: None,
+        destination: OutputDestination::Location {
+            path: "   ".to_string(),
+        },
+        selector: None,
+        columns: None,
+        include_deleted: true,
+        register_as_dataset: None,
+    };
+
+    let error = execute_output(&df.lazy(), &operation, &writer, None).unwrap_err();
+    assert!(matches!(error, OutputError::InvalidDestination(_)));
+    assert_eq!(writer.writes(), 0);
+}
+
+#[test]
+fn test_empty_table_destination_name_fails_before_write() {
+    let df = df! { "id" => &[1, 2, 3] }.unwrap();
+    let writer = MockOutputWriter::ok();
+    let operation = OutputOperation {
+        destination: OutputDestination::Table {
+            datasource_id: "ds-main".to_string(),
+            table: "   ".to_string(),
+            schema: None,
         },
         selector: None,
         columns: None,
@@ -598,7 +765,7 @@ fn test_execute_output_collects_once_contract() {
     let output_rs = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("src/engine/ops/output.rs");
     let source = fs::read_to_string(output_rs).unwrap();
     let function = source
-        .split("pub fn execute_output_with_registry")
+        .split("pub fn execute_output_with_registration_store_and_warning_logger")
         .nth(1)
         .unwrap();
 

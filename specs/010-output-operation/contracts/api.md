@@ -48,6 +48,12 @@ pub fn execute_output(
 7. Optionally registers output as Dataset via `metadata_store`
 8. Returns execution result with observability metrics
 
+**MetadataStore Registration Requirements**:
+- For `register_as_dataset`, the provided `MetadataStore` must support:
+    - `get_dataset_by_name(&str) -> Result<Option<Dataset>>`
+    - `register_dataset(Dataset) -> Result<Uuid>`
+- Registration failures are warning-logged and remain non-fatal after a successful write.
+
 **Errors**:
 - `OutputError::InvalidSelector`: Selector expression is invalid or non-boolean
 - `OutputError::ColumnProjectionError`: One or more specified columns don't exist

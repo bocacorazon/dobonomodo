@@ -248,7 +248,7 @@ From `docs/entities/operation.md`:
 ### TR-05: Dataset Registration
 
 - Optional feature controlled by `register_as_dataset` parameter
-- Creates new Dataset entity via `MetadataStore` trait
+- Creates new Dataset entity via `MetadataStore` registration methods (`get_dataset_by_name`, `register_dataset`)
 - Dataset schema is extracted from output DataFrame (post-projection)
 - Dataset version is incremented if name already exists
 - Registration occurs ONLY after successful write
@@ -292,7 +292,8 @@ From `docs/entities/operation.md`:
 ## Constraints
 
 - **C-01**: Must use existing `OutputWriter` trait (no changes to interface)
-- **C-02**: Must use existing `MetadataStore` trait (no changes to interface)
+- **C-02**: Must use `MetadataStore` as the dataset-registration boundary for the public `execute_output(..., metadata_store)` path
+- **C-02a**: `MetadataStore` interface may be extended additively for output registration support (`get_dataset_by_name`, `register_dataset`)
 - **C-03**: Rust edition 2021, compatible with Polars 0.46
 - **C-04**: No external dependencies beyond workspace dependencies (anyhow, thiserror, polars, serde)
 

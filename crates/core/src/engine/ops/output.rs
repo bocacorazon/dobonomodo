@@ -28,6 +28,9 @@ pub enum OutputError {
         available: Vec<String>,
     },
 
+    #[error("Column projection cannot be empty")]
+    EmptyColumnProjection,
+
     #[error("Write operation failed: {0}")]
     WriteFailed(#[from] anyhow::Error),
 
@@ -53,10 +56,36 @@ pub enum OutputError {
     PolarsError(#[from] polars::error::PolarsError),
 }
 
-fn log_registration_warning(register_name: &str, error: &OutputError) {
-    eprintln!(
-        "WARN output registration failed for dataset '{register_name}': {error}"
-    );
+fn registration_warning_reason(error: &OutputError) -> &'static str {
+    match error {
+        OutputError::RegistrationFailed(_) => "registration_backend_error",
+        OutputError::InvalidSchema(_) | OutputError::EmptyDataFrame => {
+            "invalid_registration_schema"
+        }
+        _ => "registration_error",
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct OutputWarning {
+    pub code: &'static str,
+    pub dataset_name: String,
+    pub reason: &'static str,
+}
+
+pub trait OutputWarningLogger {
+    fn warn(&self, warning: OutputWarning);
+}
+
+struct StderrOutputWarningLogger;
+
+impl OutputWarningLogger for StderrOutputWarningLogger {
+    fn warn(&self, warning: OutputWarning) {
+        eprintln!(
+            "level=warn code={} dataset_name={} reason={}",
+            warning.code, warning.dataset_name, warning.reason
+        );
+    }
 }
 
 /// Registration adapter for dataset-registration backends.
@@ -136,6 +165,10 @@ pub enum ColumnType {
 }
 
 fn validate_columns(schema: &Schema, columns: &[String]) -> Result<(), OutputError> {
+    if columns.is_empty() {
+        return Err(OutputError::EmptyColumnProjection);
+    }
+
     let available: Vec<String> = schema.iter_names().map(|name| name.to_string()).collect();
     let available_set: HashSet<&str> = available.iter().map(String::as_str).collect();
 
@@ -175,24 +208,40 @@ fn validate_selector(working_dataset: &LazyFrame, selector: &Expr) -> Result<(),
 }
 
 fn validate_destination(destination: &ModelOutputDestination) -> Result<(), OutputError> {
-    if destination.destination_type.trim().is_empty() {
-        return Err(OutputError::InvalidDestination(
-            "destination_type cannot be empty".to_string(),
-        ));
+    match destination {
+        ModelOutputDestination::Table {
+            datasource_id,
+            table,
+            ..
+        } => {
+            if datasource_id.trim().is_empty() {
+                return Err(OutputError::InvalidDestination(
+                    "table destination requires non-empty datasource_id".to_string(),
+                ));
+            }
+            if table.trim().is_empty() {
+                return Err(OutputError::InvalidDestination(
+                    "table destination requires non-empty table".to_string(),
+                ));
+            }
+            Ok(())
+        }
+        ModelOutputDestination::Location { path } => {
+            if path.trim().is_empty() {
+                return Err(OutputError::InvalidDestination(
+                    "location destination requires non-empty path".to_string(),
+                ));
+            }
+            Ok(())
+        }
     }
+}
 
-    let target = destination
-        .target
-        .as_deref()
-        .ok_or_else(|| OutputError::InvalidDestination("target is required".to_string()))?;
-
-    if target.trim().is_empty() {
-        return Err(OutputError::InvalidDestination(
-            "target cannot be empty".to_string(),
-        ));
+fn destination_table_name(destination: &ModelOutputDestination) -> String {
+    match destination {
+        ModelOutputDestination::Table { table, .. } => table.clone(),
+        ModelOutputDestination::Location { path } => path.clone(),
     }
-
-    Ok(())
 }
 
 fn map_polars_type(dtype: &DataType) -> Result<ColumnType, OutputError> {
@@ -272,6 +321,7 @@ pub fn extract_schema(df: &DataFrame) -> Result<OutputSchema, OutputError> {
 
 fn register_dataset(
     register_name: &str,
+    destination: &ModelOutputDestination,
     output_df: &DataFrame,
     registration_store: &dyn DatasetRegistrationStore,
 ) -> Result<Uuid, OutputError> {
@@ -308,7 +358,7 @@ fn register_dataset(
         status: DatasetStatus::Active,
         resolver_id: existing.as_ref().and_then(|item| item.resolver_id.clone()),
         main_table: TableRef {
-            name: format!("{}_output", register_name),
+            name: destination_table_name(destination),
             temporal_mode: to_model_temporal_mode(&schema.temporal_mode),
             columns: model_columns,
         },
@@ -344,11 +394,29 @@ pub fn execute_output_with_registry(
     output_writer: &dyn OutputWriter,
     metadata_store: Option<&dyn MetadataStore>,
 ) -> Result<OutputResult, OutputError> {
-    let metadata_registration_adapter = metadata_store.map(|store| MetadataStoreRegistrationAdapter {
-        metadata_store: store,
-    });
+    let warning_logger = StderrOutputWarningLogger;
+    execute_output_with_registry_and_warning_logger(
+        working_dataset,
+        operation,
+        output_writer,
+        metadata_store,
+        &warning_logger,
+    )
+}
 
-    execute_output_with_registration_store(
+pub fn execute_output_with_registry_and_warning_logger(
+    working_dataset: &LazyFrame,
+    operation: &OutputOperation,
+    output_writer: &dyn OutputWriter,
+    metadata_store: Option<&dyn MetadataStore>,
+    warning_logger: &dyn OutputWarningLogger,
+) -> Result<OutputResult, OutputError> {
+    let metadata_registration_adapter =
+        metadata_store.map(|store| MetadataStoreRegistrationAdapter {
+            metadata_store: store,
+        });
+
+    execute_output_with_registration_store_and_warning_logger(
         working_dataset,
         operation,
         output_writer,
@@ -356,6 +424,7 @@ pub fn execute_output_with_registry(
         metadata_registration_adapter
             .as_ref()
             .map(|adapter| adapter as &dyn DatasetRegistrationStore),
+        warning_logger,
     )
 }
 
@@ -366,6 +435,25 @@ pub fn execute_output_with_registration_store(
     output_writer: &dyn OutputWriter,
     metadata_store: Option<&dyn MetadataStore>,
     registration_store: Option<&dyn DatasetRegistrationStore>,
+) -> Result<OutputResult, OutputError> {
+    let warning_logger = StderrOutputWarningLogger;
+    execute_output_with_registration_store_and_warning_logger(
+        working_dataset,
+        operation,
+        output_writer,
+        metadata_store,
+        registration_store,
+        &warning_logger,
+    )
+}
+
+pub fn execute_output_with_registration_store_and_warning_logger(
+    working_dataset: &LazyFrame,
+    operation: &OutputOperation,
+    output_writer: &dyn OutputWriter,
+    metadata_store: Option<&dyn MetadataStore>,
+    registration_store: Option<&dyn DatasetRegistrationStore>,
+    warning_logger: &dyn OutputWarningLogger,
 ) -> Result<OutputResult, OutputError> {
     let source_schema = working_dataset.clone().collect_schema()?;
 
@@ -423,22 +511,42 @@ pub fn execute_output_with_registration_store(
     let mut dataset_id = None;
     if let Some(register_name) = registration_name {
         if let Some(registration_store) = registration_store {
-            match register_dataset(register_name, &output_df, registration_store) {
+            match register_dataset(
+                register_name,
+                &operation.destination,
+                &output_df,
+                registration_store,
+            ) {
                 Ok(registered_id) => {
                     dataset_id = Some(registered_id);
                 }
                 Err(error) => {
-                    log_registration_warning(register_name, &error);
+                    let warning = OutputWarning {
+                        code: "output.registration.failed",
+                        dataset_name: register_name.to_string(),
+                        reason: registration_warning_reason(&error),
+                    };
+                    warning_logger.warn(warning);
                 }
             }
         } else if let Some(metadata_store) = metadata_store {
             let metadata_registration_adapter = MetadataStoreRegistrationAdapter { metadata_store };
-            match register_dataset(register_name, &output_df, &metadata_registration_adapter) {
+            match register_dataset(
+                register_name,
+                &operation.destination,
+                &output_df,
+                &metadata_registration_adapter,
+            ) {
                 Ok(registered_id) => {
                     dataset_id = Some(registered_id);
                 }
                 Err(error) => {
-                    log_registration_warning(register_name, &error);
+                    let warning = OutputWarning {
+                        code: "output.registration.failed",
+                        dataset_name: register_name.to_string(),
+                        reason: registration_warning_reason(&error),
+                    };
+                    warning_logger.warn(warning);
                 }
             }
         }

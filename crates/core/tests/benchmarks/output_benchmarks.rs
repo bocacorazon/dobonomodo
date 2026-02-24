@@ -26,9 +26,8 @@ fn benchmark_large_output_execution() {
     .unwrap();
 
     let operation = OutputOperation {
-        destination: OutputDestination {
-            destination_type: "benchmark".to_string(),
-            target: Some("memory://benchmark".to_string()),
+        destination: OutputDestination::Location {
+            path: "memory://benchmark".to_string(),
         },
         selector: Some(col("amount").gt(lit(100))),
         columns: Some(vec!["id".to_string(), "amount".to_string()]),

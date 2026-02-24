@@ -51,6 +51,17 @@ impl MetadataStore for NoopMetadataStore {
         anyhow::bail!("not implemented")
     }
 
+    fn get_dataset_by_name(&self, _name: &str) -> anyhow::Result<Option<dobo_core::model::Dataset>> {
+        anyhow::bail!("not implemented")
+    }
+
+    fn register_dataset(
+        &self,
+        _dataset: dobo_core::model::Dataset,
+    ) -> anyhow::Result<uuid::Uuid> {
+        anyhow::bail!("not implemented")
+    }
+
     fn get_resolver(&self, _id: &str) -> anyhow::Result<dobo_core::model::Resolver> {
         anyhow::bail!("not implemented")
     }
