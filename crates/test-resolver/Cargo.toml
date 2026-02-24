@@ -5,3 +5,5 @@ edition.workspace = true
 
 [dependencies]
 dobo-core = { path = "../core" }
+anyhow.workspace = true
+polars.workspace = true

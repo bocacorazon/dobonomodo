@@ -26,6 +26,17 @@ pub struct ResolverSnapshot {
     pub dataset_id: Uuid,
     pub resolver_id: String,
     pub resolver_version: i32,
+    /// Stores one entry per runtime join resolution for reproducibility.
+    #[serde(default)]
+    pub join_datasets: Vec<JoinDatasetSnapshot>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct JoinDatasetSnapshot {
+    pub alias: String,
+    pub dataset_id: Uuid,
+    pub dataset_version: i32,
+    pub resolver_source: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]

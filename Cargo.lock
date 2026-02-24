@@ -256,6 +256,7 @@ dependencies = [
  "serde",
  "serde_json",
  "serde_yaml",
+ "test-resolver",
  "thiserror",
  "uuid",
 ]
@@ -1288,7 +1289,9 @@ dependencies = [
 name = "test-resolver"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "dobo-core",
+ "polars",
 ]
 
 [[package]]

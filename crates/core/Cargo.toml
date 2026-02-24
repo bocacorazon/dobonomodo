@@ -12,3 +12,6 @@ serde_json.workspace = true
 serde_yaml.workspace = true
 thiserror.workspace = true
 uuid.workspace = true
+
+[dev-dependencies]
+test-resolver = { path = "../test-resolver" }

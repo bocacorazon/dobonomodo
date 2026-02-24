@@ -38,6 +38,7 @@ Modifies column values on matching rows. Can update existing columns, add new co
 #### RuntimeJoin (embedded structure)
 
 A `RuntimeJoin` loads a Dataset at operation time and makes its columns available under an `alias` for use in any assignment expression within the same `update`. The join Dataset is resolved via the Resolver using the same precedence as the input Dataset (Project `resolver_overrides` → Dataset `resolver_id` → system default) and period-filtered according to the join Dataset's `temporal_mode`.
+At execution time, joined columns are materialized with a `_<alias>` suffix in the working frame so expression compilation can map `alias.column` references deterministically.
 
 | Field | Type | Required | Description |
 |---|---|---|---|
@@ -146,6 +147,7 @@ The engine substitutes the named selector's expression before evaluation. Named 
 | BR-008a | A RuntimeJoin's `dataset_id` MUST reference an existing, active Dataset. The Resolver used to load the join Dataset follows the same precedence as the input Dataset: Project `resolver_overrides` → Dataset `resolver_id` → system default. |
 | BR-008b | A RuntimeJoin Dataset is period-filtered according to its own `temporal_mode`: `period` tables use `_period = run_period.identifier`; `bitemporal` tables use the asOf query. The Run's current Period is always used — there is no per-join Period override. |
 | BR-008c | When `dataset_version` is omitted on a RuntimeJoin, the engine resolves to the latest active version of the Dataset at Run time. When set, the pinned version is used. The resolved version is captured in the Run's ProjectSnapshot `resolver_snapshots`. |
+| BR-008d | RuntimeJoin `on` currently supports AND-connected equality predicates between working and join references, plus join-only filter predicates. Other predicate shapes (for example OR-connected terms, non-equality cross-table comparisons, or left-only terms) MUST fail early with a clear contract-level error. |
 | BR-009 | `aggregate` appends new rows; it does NOT replace or remove existing rows in the working dataset. |
 | BR-009 | In `append`, every column on the incoming rows MUST match an existing column in the working dataset. Additional columns on the working dataset that are absent from incoming rows are set to `NULL`. |
 | BR-010 | In `append`, every column on the incoming rows MUST match an existing column in the working dataset. Additional columns on the working dataset that are absent from incoming rows are set to `NULL`. |

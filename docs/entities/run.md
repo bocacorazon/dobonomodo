@@ -51,6 +51,16 @@ A full copy of the Project definition captured immutably at execution time.
 | `dataset_id` | `UUID` | The Dataset for which the Resolver was used |
 | `resolver_id` | `String` | The Resolver's stable identifier |
 | `resolver_version` | `Integer` | The Resolver version at time of execution |
+| `join_datasets` | `List<JoinDatasetSnapshot>` | One entry per RuntimeJoin resolution, preserving alias + resolved dataset version |
+
+### JoinDatasetSnapshot (embedded within ResolverSnapshot)
+
+| Attribute | Type | Description |
+|---|---|---|
+| `alias` | `String` | RuntimeJoin alias used in the update operation |
+| `dataset_id` | `UUID` | Joined Dataset identifier |
+| `dataset_version` | `Integer` | Resolved Dataset version captured for reproducibility |
+| `resolver_source` | `String` | Resolver precedence source (`project_override`, `dataset_resolver`, `system_default`) |
 
 ### ErrorDetail (embedded structure)
 
@@ -135,6 +145,11 @@ run:
       - dataset_id: uuid
         resolver_id: string
         resolver_version: integer
+        join_datasets:
+          - alias: string
+            dataset_id: uuid
+            dataset_version: integer
+            resolver_source: string
   period_ids: [uuid]                # required; at least one
   status: queued | running | completed | failed | cancelled  # required
   trigger_type: manual | scheduled  # required

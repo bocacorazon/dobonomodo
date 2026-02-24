@@ -39,8 +39,17 @@ impl OutputWriter for NoopOutputWriter {
 }
 
 impl MetadataStore for NoopMetadataStore {
-    fn get_dataset(&self, _id: &uuid::Uuid, _version: Option<i32>) -> anyhow::Result<dobo_core::model::Dataset> {
-        anyhow::bail!("not implemented")
+    fn get_dataset(
+        &self,
+        _id: &uuid::Uuid,
+        _version: Option<i32>,
+    ) -> std::result::Result<
+        dobo_core::model::Dataset,
+        dobo_core::model::metadata_store::DatasetLookupError,
+    > {
+        Err(dobo_core::model::metadata_store::DatasetLookupError::Other(
+            anyhow::anyhow!("not implemented"),
+        ))
     }
 
     fn get_project(&self, _id: &uuid::Uuid) -> anyhow::Result<dobo_core::model::Project> {
@@ -51,13 +60,21 @@ impl MetadataStore for NoopMetadataStore {
         anyhow::bail!("not implemented")
     }
 
-    fn update_run_status(&self, _id: &uuid::Uuid, _status: dobo_core::model::RunStatus) -> anyhow::Result<()> {
+    fn update_run_status(
+        &self,
+        _id: &uuid::Uuid,
+        _status: dobo_core::model::RunStatus,
+    ) -> anyhow::Result<()> {
         anyhow::bail!("not implemented")
     }
 }
 
 impl TraceWriter for NoopTraceWriter {
-    fn write_events(&self, _run_id: &uuid::Uuid, _events: &[dobo_core::trace::types::TraceEvent]) -> anyhow::Result<()> {
+    fn write_events(
+        &self,
+        _run_id: &uuid::Uuid,
+        _events: &[dobo_core::trace::types::TraceEvent],
+    ) -> anyhow::Result<()> {
         anyhow::bail!("not implemented")
     }
 }
