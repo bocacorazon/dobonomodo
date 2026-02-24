@@ -5,8 +5,13 @@ debug/
 release/
 .cargo-target/
 
+*.rs.bk
+*.rlib
+*.prof*
+
 # VCS and Docker metadata
 .git/
+.gitignore
 Dockerfile*
 .dockerignore
 
