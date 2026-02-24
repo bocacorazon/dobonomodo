@@ -32,3 +32,4 @@
 ## Notes
 
 - Validation iteration 1: all checks passed, no unresolved clarifications.
+- Ready for `/speckit.clarify` or `/speckit.plan`.
