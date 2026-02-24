@@ -1,0 +1,19 @@
+name: TS-08 named selector
+selectors:
+  active_rows: status = "active"
+operation:
+  type: update
+  selector: "{{active_rows}}"
+  assignments:
+    - column: status
+      expression: "\"processed\""
+input:
+  columns: [id, status, _updated_at]
+  rows:
+    - [1, active, 1000]
+    - [2, inactive, 2000]
+expected:
+  columns: [id, status, _updated_at]
+  rows:
+    - [1, processed, 1700000000000]
+    - [2, inactive, 2000]

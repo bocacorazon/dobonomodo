@@ -3,6 +3,8 @@
 Auto-generated from all feature plans. Last updated: 2026-02-22
 
 ## Active Technologies
+- Rust 1.75+ (Rust 2021 edition) + Polars 0.46 (lazy API), serde, serde_json, serde_yaml, anyhow, thiserror (005-update-operation)
+- N/A (operates on in-memory LazyFrame) (005-update-operation)
 
 - Rust (stable toolchain policy; project MSRV to be pinned when CI toolchain baseline is introduced) + `polars` (lazy feature), `serde`, `serde_yaml`, `serde_json`, `uuid`, `chrono`, `anyhow`/`thiserror` (001-workspace-scaffold)
 
@@ -27,6 +29,8 @@ crates/
 Rust (stable toolchain policy; project MSRV to be pinned when CI toolchain baseline is introduced): Follow standard conventions
 
 ## Recent Changes
+- 005-update-operation: Added Rust 1.75+ (Rust 2021 edition) + Polars 0.46 (lazy API), serde, serde_json, serde_yaml, anyhow, thiserror
+- 005-update-operation: Added Rust 1.75+ (Rust 2021 edition) + Polars 0.46 (lazy API), serde, serde_json, serde_yaml, anyhow, thiserror
 
 - 001-workspace-scaffold: Added Rust (stable toolchain policy; project MSRV to be pinned when CI toolchain baseline is introduced) + `polars` (lazy feature), `serde`, `serde_yaml`, `serde_json`, `uuid`, `chrono`, `anyhow`/`thiserror`
 
