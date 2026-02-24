@@ -1,11 +1,16 @@
+# Rust build outputs
 target/
 **/target/
 debug/
 release/
-node_modules/
+.cargo-target/
+
+# VCS and Docker metadata
 .git/
 Dockerfile*
 .dockerignore
+
+# Common transient files
 *.log*
 .env*
 coverage/
