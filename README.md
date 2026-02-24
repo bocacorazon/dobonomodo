@@ -6,6 +6,8 @@ DobONoMoDo is a configuration-driven computation engine for running ordered data
 
 This repository is currently **specification-first**: architecture, domain model, and implementation plans are defined in `docs/`, while the Rust workspace scaffold is planned but not yet generated in the root.
 
+Recent implementation progress includes the append-operation execution path and tests under `crates/core/src/engine/append.rs` and `crates/core/tests/`.
+
 ## Target architecture (planned)
 
 - **Language/runtime**: Rust
