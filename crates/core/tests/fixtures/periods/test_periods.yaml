@@ -1,0 +1,80 @@
+# Sample periods for testing period expansion
+# Calendar: fiscal_calendar (550e8400-e29b-41d4-a716-446655440001)
+# Hierarchy: 2024 (year) → Q1 (quarter) → Jan, Feb, Mar (months)
+
+periods:
+  # Year level
+  - id: "550e8400-e29b-41d4-a716-446655440100"
+    identifier: "2024"
+    name: "2024"
+    description: "Year 2024"
+    calendar_id: "550e8400-e29b-41d4-a716-446655440001"
+    year: 2024
+    sequence: 1
+    start_date: "2024-01-01"
+    end_date: "2024-12-31"
+    status: open
+    parent_id: null
+
+  # Quarter level (Q1)
+  - id: "550e8400-e29b-41d4-a716-446655440200"
+    identifier: "2024-Q1"
+    name: "2024 Q1"
+    description: "First quarter 2024"
+    calendar_id: "550e8400-e29b-41d4-a716-446655440001"
+    year: 2024
+    sequence: 1
+    start_date: "2024-01-01"
+    end_date: "2024-03-31"
+    status: open
+    parent_id: "550e8400-e29b-41d4-a716-446655440100"
+
+  # Quarter level (Q2)
+  - id: "550e8400-e29b-41d4-a716-446655440201"
+    identifier: "2024-Q2"
+    name: "2024 Q2"
+    description: "Second quarter 2024"
+    calendar_id: "550e8400-e29b-41d4-a716-446655440001"
+    year: 2024
+    sequence: 2
+    start_date: "2024-04-01"
+    end_date: "2024-06-30"
+    status: open
+    parent_id: "550e8400-e29b-41d4-a716-446655440100"
+
+  # Month level (Jan-Mar for Q1)
+  - id: "550e8400-e29b-41d4-a716-446655440300"
+    identifier: "2024-01"
+    name: "January 2024"
+    description: "January 2024"
+    calendar_id: "550e8400-e29b-41d4-a716-446655440001"
+    year: 2024
+    sequence: 1
+    start_date: "2024-01-01"
+    end_date: "2024-01-31"
+    status: open
+    parent_id: "550e8400-e29b-41d4-a716-446655440200"
+
+  - id: "550e8400-e29b-41d4-a716-446655440301"
+    identifier: "2024-02"
+    name: "February 2024"
+    description: "February 2024"
+    calendar_id: "550e8400-e29b-41d4-a716-446655440001"
+    year: 2024
+    sequence: 2
+    start_date: "2024-02-01"
+    end_date: "2024-02-29"
+    status: open
+    parent_id: "550e8400-e29b-41d4-a716-446655440200"
+
+  - id: "550e8400-e29b-41d4-a716-446655440302"
+    identifier: "2024-03"
+    name: "March 2024"
+    description: "March 2024"
+    calendar_id: "550e8400-e29b-41d4-a716-446655440001"
+    year: 2024
+    sequence: 3
+    start_date: "2024-03-01"
+    end_date: "2024-03-31"
+    status: open
+    parent_id: "550e8400-e29b-41d4-a716-446655440200"

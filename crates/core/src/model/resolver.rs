@@ -77,6 +77,10 @@ pub struct ResolvedLocation {
     pub schema: Option<String>,
     #[serde(default)]
     pub period_identifier: Option<String>,
+    #[serde(default)]
+    pub resolver_id: Option<String>,
+    #[serde(default)]
+    pub rule_name: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
