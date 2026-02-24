@@ -1,0 +1,71 @@
+name: "Harness Self Test - Passthrough"
+description: "Validates that data passes through unchanged"
+
+periods:
+  - identifier: "2026-01"
+    level: "month"
+    start_date: "2026-01-01"
+    end_date: "2026-01-31"
+
+input:
+  dataset:
+    id: "550e8400-e29b-41d4-a716-446655440000"
+    name: "test_orders"
+    description: "Test orders dataset"
+    owner: "test"
+    version: 1
+    status: active
+    main_table:
+      name: "orders"
+      temporal_mode: period
+      columns:
+        - name: "order_id"
+          type: integer
+          nullable: false
+        - name: "amount"
+          type: decimal
+          nullable: false
+  
+  data:
+    orders:
+      rows:
+        - order_id: 1
+          amount: 100.0
+          _period: "2026-01"
+        - order_id: 2
+          amount: 200.0
+          _period: "2026-01"
+        - order_id: 3
+          amount: 150.0
+          _period: "2026-01"
+
+project:
+  id: "660e8400-e29b-41d4-a716-446655440001"
+  name: "passthrough"
+  owner: "test"
+  version: 1
+  status: active
+  visibility: private
+  input_dataset_id: "550e8400-e29b-41d4-a716-446655440000"
+  input_dataset_version: 1
+  materialization: eager
+  operations:
+    - order: 1
+      type: output
+      parameters: {}
+
+expected_output:
+  data:
+    rows:
+      - order_id: 1
+        amount: 100.0
+      - order_id: 2
+        amount: 200.0
+      - order_id: 3
+        amount: 150.0
+
+config:
+  match_mode: exact
+  validate_metadata: false
+  validate_traceability: false
+  snapshot_on_failure: true
