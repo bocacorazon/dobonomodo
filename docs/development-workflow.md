@@ -38,6 +38,9 @@ scripts/orchestrate.sh --phase 0-1
 # Run a single spec (for testing)
 scripts/orchestrate.sh --spec S01
 
+# Trigger only phase-gate merge for an already completed phase
+scripts/orchestrate.sh --phase 1 --phase-gate-only
+
 # Preview without executing
 scripts/orchestrate.sh --dry-run
 ```
@@ -55,6 +58,8 @@ The orchestrator (`scripts/orchestrate.sh`) reads `scripts/spec-map.toml` — a 
    c. Starts the **agent runner** inside the container (`scripts/agent-run.sh`).
 3. Polls for completion by watching `.agent-status` files in each worktree.
 4. When all specs in the phase finish, performs a **phase-gate merge** (see Stage 6).
+
+If specs were completed in separate/manual runs, use `--phase-gate-only` to merge without re-running agents or code review.
 
 ### Stage 3: Spec-Kit Pipeline (Agent, per spec)
 
@@ -229,6 +234,17 @@ git merge --no-edit develop
 ```
 
 Do not delete the worktree unless you intentionally want a full rerun.
+
+#### 4) Merge completed phase without rerunning specs
+
+If all specs in a phase already have `.agent-status=SUCCESS`, trigger only the merge stage:
+
+```bash
+cd /home/marcos/Projects/dobonomodo
+scripts/orchestrate.sh --phase 1 --phase-gate-only
+```
+
+This validates existing status files in each phase worktree and then executes phase-gate merge + post-merge quality gates.
 
 ## Parallelism Plan
 
