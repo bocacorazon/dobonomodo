@@ -55,7 +55,6 @@ pub mod parser;
 pub mod types;
 pub mod validation;
 
-// Re-export main types and functions
 pub use ast::*;
 pub use compiler::{
     compile_expression, compile_expression_with_source, compile_with_interpolation,
@@ -68,7 +67,6 @@ pub use parser::{parse_expression, parse_expression_with_span, Span};
 pub use types::*;
 pub use validation::{infer_type, resolve_column, validate_expression};
 
-/// Returns this module name (used by foundation compile checks).
 pub fn module_name() -> &'static str {
     "dsl"
 }

@@ -1,8 +1,8 @@
-# Specification Quality Checklist: Speckit Specify Workflow Run
+# Specification Quality Checklist: Speckit Specify Workflow Execution
 
-**Purpose**: Validate specification completeness and quality before proceeding to planning
-**Created**: 2026-02-22
-**Feature**: [/workspace/specs/001-speckit-specify-workflow/spec.md](/workspace/specs/001-speckit-specify-workflow/spec.md)
+**Purpose**: Validate specification completeness and quality before proceeding to planning  
+**Created**: 2026-02-22  
+**Feature**: [spec.md](../spec.md)
 
 ## Content Quality
 
@@ -31,5 +31,5 @@
 
 ## Notes
 
-- Validation iteration 1: All checks passed.
+- Validation iteration 1: all checklist items pass.
 - Ready for `/speckit.clarify` or `/speckit.plan`.
