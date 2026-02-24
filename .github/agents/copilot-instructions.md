@@ -3,6 +3,8 @@
 Auto-generated from all feature plans. Last updated: 2026-02-22
 
 ## Active Technologies
+- Rust 2021 edition + Polars (lazy API for data operations), serde (serialization), uuid (row tracking) (007-delete-operation)
+- PostgreSQL (metadata store), Polars DataFrames (in-memory working data) (007-delete-operation)
 
 - Rust (stable toolchain policy; project MSRV to be pinned when CI toolchain baseline is introduced) + `polars` (lazy feature), `serde`, `serde_yaml`, `serde_json`, `uuid`, `chrono`, `anyhow`/`thiserror` (001-workspace-scaffold)
 
@@ -27,6 +29,8 @@ crates/
 Rust (stable toolchain policy; project MSRV to be pinned when CI toolchain baseline is introduced): Follow standard conventions
 
 ## Recent Changes
+- 007-delete-operation: Added Rust 2021 edition + Polars (lazy API for data operations), serde (serialization), uuid (row tracking)
+- 007-delete-operation: Added Rust 2021 edition + Polars (lazy API for data operations), serde (serialization), uuid (row tracking)
 
 - 001-workspace-scaffold: Added Rust (stable toolchain policy; project MSRV to be pinned when CI toolchain baseline is introduced) + `polars` (lazy feature), `serde`, `serde_yaml`, `serde_json`, `uuid`, `chrono`, `anyhow`/`thiserror`
 

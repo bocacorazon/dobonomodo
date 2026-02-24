@@ -24,7 +24,15 @@
     "input_dataset_version": 1,
     "materialization": "eager",
     "operations": [
-      { "order": 1, "type": "output", "parameters": {} }
+      {
+        "order": 1,
+        "type": "output",
+        "parameters": {
+          "destination": {
+            "destination_type": "memory"
+          }
+        }
+      }
     ]
   },
   "run": {
@@ -36,7 +44,15 @@
       "input_dataset_version": 1,
       "materialization": "eager",
       "operations": [
-        { "order": 1, "type": "output", "parameters": {} }
+        {
+          "order": 1,
+          "type": "output",
+          "parameters": {
+            "destination": {
+              "destination_type": "memory"
+            }
+          }
+        }
       ],
       "resolver_snapshots": []
     },
