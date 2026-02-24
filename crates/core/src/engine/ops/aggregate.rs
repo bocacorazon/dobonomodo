@@ -190,10 +190,29 @@ pub fn validate_aggregate_compile(
     Ok(())
 }
 
+/// Converts a list of group-by column names into Polars column expressions.
+///
+/// # Parameters
+/// - `group_by`: Slice of column name strings to group by.
+///
+/// # Returns
+/// A `Vec<Expr>` of Polars column expressions, one per group-by column.
 pub fn convert_group_by_to_polars_exprs(group_by: &[String]) -> Vec<Expr> {
     group_by.iter().map(col).collect()
 }
 
+/// Converts a list of [`Aggregation`] specs into Polars aggregation expressions.
+///
+/// Each aggregation's `expression` field is parsed to determine the aggregate
+/// function (e.g. `SUM`, `COUNT`, `AVG`) and its source column. The resulting
+/// Polars expression is aliased to `aggregation.column`.
+///
+/// # Parameters
+/// - `aggregations`: Slice of [`Aggregation`] definitions from the operation spec.
+///
+/// # Returns
+/// `Ok(Vec<Expr>)` on success, or `Err(AggregateError)` if any expression is
+/// invalid or references an unknown function.
 pub fn convert_aggregations_to_polars_exprs(
     aggregations: &[Aggregation],
 ) -> Result<Vec<Expr>, AggregateError> {
@@ -315,6 +334,20 @@ fn parse_aggregation_expression(
     Ok((function, source_column))
 }
 
+/// Identifies schema columns that are not part of the aggregation output.
+///
+/// A column is considered "non-aggregated" if it is not used as a group-by key,
+/// not produced as an aggregation output column, not consumed as an aggregation
+/// source column, and is not a system column (e.g. `_row_id`, `_deleted`).
+/// These columns will be filled with `null` values in the summary frame.
+///
+/// # Parameters
+/// - `schema`: The schema of the input frame.
+/// - `spec`: The [`AggregateOperation`] describing the group-by keys and aggregations.
+///
+/// # Returns
+/// `Ok(Vec<String>)` with the names of non-aggregated columns, or
+/// `Err(AggregateError)` if any aggregation expression cannot be parsed.
 pub fn identify_non_aggregated_columns(
     schema: &SchemaRef,
     spec: &AggregateOperation,
@@ -358,6 +391,20 @@ pub fn identify_non_aggregated_columns(
         .collect())
 }
 
+/// Adds null-filled columns to `summary` for every column listed in `columns`.
+///
+/// If a column already exists in `summary` it is left untouched. The data type
+/// for each new column is taken from `schema`; if the column is not found in
+/// `schema`, [`DataType::Null`] is used as a fallback.
+///
+/// # Parameters
+/// - `summary`: The aggregate result [`DataFrame`] to extend.
+/// - `schema`: The schema of the original input frame, used to look up data types.
+/// - `columns`: Names of the columns to add as null series.
+///
+/// # Returns
+/// `Ok(DataFrame)` with the additional null columns, or `Err(AggregateError)` if
+/// a column could not be appended.
 pub fn add_null_columns_for_non_aggregated(
     mut summary: DataFrame,
     schema: &SchemaRef,
@@ -379,10 +426,36 @@ pub fn add_null_columns_for_non_aggregated(
     Ok(summary)
 }
 
+/// Generates a vector of `size` unique row identifiers as UUID v7 strings.
+///
+/// # Parameters
+/// - `size`: The number of row IDs to generate.
+///
+/// # Returns
+/// A `Vec<String>` where each element is a new UUID v7 formatted as a lowercase
+/// hyphenated string (e.g. `"01932b3c-..."`).
 pub fn generate_row_ids(size: usize) -> Vec<String> {
     (0..size).map(|_| Uuid::now_v7().to_string()).collect()
 }
 
+/// Appends system metadata columns to the aggregate summary frame.
+///
+/// The following columns are added (or left unchanged if already present):
+/// - `_row_id` - a unique UUID v7 string per row
+/// - `_created_at` - RFC 3339 timestamp of the execution time
+/// - `_updated_at` - same as `_created_at` for newly created rows
+/// - `_source_dataset_id` - the source dataset UUID from the execution context
+/// - `_source_table` - the source table name from the execution context
+/// - `_deleted` - boolean flag, set to `false` for all new rows
+/// - `_period` - nullable string column; only added when not already present
+///
+/// # Parameters
+/// - `summary`: The aggregate result [`DataFrame`] to annotate.
+/// - `context`: The [`ExecutionContext`] supplying timestamp and source identifiers.
+///
+/// # Returns
+/// `Ok(DataFrame)` with all system columns populated, or `Err(AggregateError)` if
+/// any column could not be appended.
 pub fn add_system_metadata(
     mut summary: DataFrame,
     context: &ExecutionContext,
