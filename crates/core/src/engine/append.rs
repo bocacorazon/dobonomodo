@@ -13,7 +13,7 @@ use crate::model::{
     AppendOperation, Dataset, Expression, Project, ResolutionRule, ResolutionStrategy,
     ResolvedLocation, Resolver,
 };
-use crate::MetadataStore;
+use crate::{MetadataStore, MetadataStoreError};
 
 const INTERNAL_SOURCE_ROWS_LOADED: &str = "__dobo_source_rows_loaded";
 const INTERNAL_SOURCE_ROWS_AFTER_SELECTOR: &str = "__dobo_source_rows_after_selector";
@@ -303,6 +303,7 @@ fn resolve_location(
         table: None,
         schema: None,
         period_identifier: run_period.map(str::to_owned),
+        catalog_response: None,
     };
 
     match &selected_rule.strategy {
@@ -377,24 +378,19 @@ fn get_source_dataset<M: MetadataStore>(
         })
 }
 
-fn map_dataset_lookup_error(
-    error: anyhow::Error,
-    dataset_id: Uuid,
-    version: Option<i32>,
-) -> AppendError {
-    if is_not_found_error(&error) {
-        return match version {
+fn map_dataset_lookup_error(error: MetadataStoreError, dataset_id: Uuid, version: Option<i32>) -> AppendError {
+    match error {
+        MetadataStoreError::DatasetNotFound { .. } => match version {
             Some(version) => AppendError::DatasetVersionNotFound {
                 dataset_id,
                 version,
             },
             None => AppendError::DatasetNotFound { dataset_id },
-        };
-    }
-
-    AppendError::MetadataAccessError {
-        entity: "dataset".to_owned(),
-        message: error.to_string(),
+        },
+        other => AppendError::MetadataAccessError {
+            entity: "dataset".to_owned(),
+            message: other.to_string(),
+        },
     }
 }
 
@@ -421,20 +417,14 @@ fn resolve_source_resolver<M: MetadataStore>(
         .map_err(|error| map_resolver_lookup_error(error, operation.source.dataset_id))
 }
 
-fn map_resolver_lookup_error(error: anyhow::Error, dataset_id: Uuid) -> AppendError {
-    if is_not_found_error(&error) {
-        return AppendError::ResolverNotFound { dataset_id };
+fn map_resolver_lookup_error(error: MetadataStoreError, dataset_id: Uuid) -> AppendError {
+    match error {
+        MetadataStoreError::ResolverNotFound { .. } => AppendError::ResolverNotFound { dataset_id },
+        other => AppendError::MetadataAccessError {
+            entity: "resolver".to_owned(),
+            message: other.to_string(),
+        },
     }
-
-    AppendError::MetadataAccessError {
-        entity: "resolver".to_owned(),
-        message: error.to_string(),
-    }
-}
-
-fn is_not_found_error(error: &anyhow::Error) -> bool {
-    let message = error.to_string().to_ascii_lowercase();
-    message.contains("not found") || message.contains("missing")
 }
 
 fn apply_soft_delete_filter_lazy(frame: LazyFrame) -> Result<LazyFrame, AppendError> {

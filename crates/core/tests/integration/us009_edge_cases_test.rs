@@ -9,7 +9,7 @@ use dobo_core::model::{
     ResolutionStrategy, ResolvedLocation, Resolver, ResolverStatus, RunStatus, TableRef,
     Visibility,
 };
-use dobo_core::MetadataStore;
+use dobo_core::{DataLoaderError, MetadataStore, MetadataStoreError};
 use polars::df;
 use polars::prelude::IntoLazy;
 use std::cell::RefCell;
@@ -23,20 +23,30 @@ impl MetadataStore for MissingDatasetStore {
         &self,
         _id: &Uuid,
         _version: Option<i32>,
-    ) -> anyhow::Result<dobo_core::model::Dataset> {
-        anyhow::bail!("dataset missing")
+    ) -> std::result::Result<dobo_core::model::Dataset, MetadataStoreError> {
+        Err(MetadataStoreError::DatasetNotFound { id: source_id() })
     }
 
-    fn get_project(&self, _id: &Uuid) -> anyhow::Result<Project> {
-        anyhow::bail!("not used")
+    fn get_project(&self, _id: &Uuid) -> std::result::Result<Project, MetadataStoreError> {
+        Err(MetadataStoreError::OperationFailed {
+            message: "not used".to_string(),
+        })
     }
 
-    fn get_resolver(&self, _id: &str) -> anyhow::Result<Resolver> {
-        anyhow::bail!("not used")
+    fn get_resolver(&self, _id: &str) -> std::result::Result<Resolver, MetadataStoreError> {
+        Err(MetadataStoreError::OperationFailed {
+            message: "not used".to_string(),
+        })
     }
 
-    fn update_run_status(&self, _id: &Uuid, _status: RunStatus) -> anyhow::Result<()> {
-        anyhow::bail!("not used")
+    fn update_run_status(
+        &self,
+        _id: &Uuid,
+        _status: RunStatus,
+    ) -> std::result::Result<(), MetadataStoreError> {
+        Err(MetadataStoreError::OperationFailed {
+            message: "not used".to_string(),
+        })
     }
 }
 
@@ -50,7 +60,7 @@ impl DataLoader for RecordingLoader {
         &self,
         location: &ResolvedLocation,
         _schema: &TableRef,
-    ) -> anyhow::Result<polars::prelude::LazyFrame> {
+    ) -> std::result::Result<polars::prelude::LazyFrame, DataLoaderError> {
         self.locations.borrow_mut().push(location.clone());
         let frame = df!(
             "account_code" => &["4000"],
@@ -84,51 +94,81 @@ impl RecordingStore {
 }
 
 impl MetadataStore for RecordingStore {
-    fn get_dataset(&self, _id: &Uuid, version: Option<i32>) -> anyhow::Result<Dataset> {
+    fn get_dataset(
+        &self,
+        _id: &Uuid,
+        version: Option<i32>,
+    ) -> std::result::Result<Dataset, MetadataStoreError> {
         self.requested_versions.borrow_mut().push(version);
         Ok(self.dataset.clone())
     }
 
-    fn get_project(&self, _id: &Uuid) -> anyhow::Result<Project> {
-        anyhow::bail!("not used")
+    fn get_project(&self, _id: &Uuid) -> std::result::Result<Project, MetadataStoreError> {
+        Err(MetadataStoreError::OperationFailed {
+            message: "not used".to_string(),
+        })
     }
 
-    fn get_resolver(&self, id: &str) -> anyhow::Result<Resolver> {
+    fn get_resolver(&self, id: &str) -> std::result::Result<Resolver, MetadataStoreError> {
         self.resolvers
             .get(id)
             .cloned()
-            .ok_or_else(|| anyhow::anyhow!("resolver not found: {id}"))
+            .ok_or_else(|| MetadataStoreError::ResolverNotFound { id: id.to_string() })
     }
 
-    fn get_default_resolver(&self) -> anyhow::Result<Resolver> {
+    fn get_default_resolver(&self) -> std::result::Result<Resolver, MetadataStoreError> {
         self.resolvers
             .get(&self.default_resolver_id)
             .cloned()
-            .ok_or_else(|| anyhow::anyhow!("resolver not found: {}", self.default_resolver_id))
+            .ok_or_else(|| MetadataStoreError::ResolverNotFound {
+                id: self.default_resolver_id.clone(),
+            })
     }
 
-    fn update_run_status(&self, _id: &Uuid, _status: RunStatus) -> anyhow::Result<()> {
-        anyhow::bail!("not used")
+    fn update_run_status(
+        &self,
+        _id: &Uuid,
+        _status: RunStatus,
+    ) -> std::result::Result<(), MetadataStoreError> {
+        Err(MetadataStoreError::OperationFailed {
+            message: "not used".to_string(),
+        })
     }
 }
 
 struct MetadataFailureStore;
 
 impl MetadataStore for MetadataFailureStore {
-    fn get_dataset(&self, _id: &Uuid, _version: Option<i32>) -> anyhow::Result<Dataset> {
-        anyhow::bail!("metadata backend unavailable")
+    fn get_dataset(
+        &self,
+        _id: &Uuid,
+        _version: Option<i32>,
+    ) -> std::result::Result<Dataset, MetadataStoreError> {
+        Err(MetadataStoreError::OperationFailed {
+            message: "metadata backend unavailable".to_string(),
+        })
     }
 
-    fn get_project(&self, _id: &Uuid) -> anyhow::Result<Project> {
-        anyhow::bail!("not used")
+    fn get_project(&self, _id: &Uuid) -> std::result::Result<Project, MetadataStoreError> {
+        Err(MetadataStoreError::OperationFailed {
+            message: "not used".to_string(),
+        })
     }
 
-    fn get_resolver(&self, _id: &str) -> anyhow::Result<Resolver> {
-        anyhow::bail!("not used")
+    fn get_resolver(&self, _id: &str) -> std::result::Result<Resolver, MetadataStoreError> {
+        Err(MetadataStoreError::OperationFailed {
+            message: "not used".to_string(),
+        })
     }
 
-    fn update_run_status(&self, _id: &Uuid, _status: RunStatus) -> anyhow::Result<()> {
-        anyhow::bail!("not used")
+    fn update_run_status(
+        &self,
+        _id: &Uuid,
+        _status: RunStatus,
+    ) -> std::result::Result<(), MetadataStoreError> {
+        Err(MetadataStoreError::OperationFailed {
+            message: "not used".to_string(),
+        })
     }
 }
 

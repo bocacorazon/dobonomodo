@@ -1,10 +1,23 @@
+# Rust build outputs
 target/
+**/target/
 debug/
 release/
-node_modules/
-coverage/
+.cargo-target/
+
+# VCS and Docker metadata
 .git/
 Dockerfile*
 .dockerignore
+
+# Common transient files
 *.log*
 .env*
+coverage/
+node_modules/
+.DS_Store
+Thumbs.db
+*.tmp
+*.swp
+.vscode/
+.idea/

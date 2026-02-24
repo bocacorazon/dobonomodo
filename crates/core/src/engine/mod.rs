@@ -2,6 +2,8 @@ pub mod aggregation;
 pub mod append;
 pub mod error;
 pub mod executor;
+pub mod filter;
 pub mod io_traits;
+pub mod ops;
 pub mod temporal;
 pub mod types;

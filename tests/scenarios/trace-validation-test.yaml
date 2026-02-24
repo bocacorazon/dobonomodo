@@ -1,0 +1,75 @@
+name: "Trace Validation Test"
+description: "Validates that trace event validation works correctly"
+
+periods:
+  - identifier: "2026-01"
+    level: "month"
+    start_date: "2026-01-01"
+    end_date: "2026-01-31"
+
+input:
+  dataset:
+    id: "550e8400-e29b-41d4-a716-446655440002"
+    name: "test_products"
+    description: "Test products dataset"
+    owner: "test"
+    version: 1
+    status: active
+    main_table:
+      name: products
+      temporal_mode: period
+      columns:
+        - name: product_id
+          type: integer
+          nullable: false
+        - name: price
+          type: decimal
+          nullable: false
+
+  data:
+    products:
+      rows:
+        - { product_id: 1, price: 100.0, _period: "2026-01" }
+        - { product_id: 2, price: 200.0, _period: "2026-01" }
+
+project:
+  id: "660e8400-e29b-41d4-a716-446655440002"
+  name: "passthrough-with-trace"
+  owner: "test"
+  version: 1
+  status: active
+  visibility: private
+  input_dataset_id: "550e8400-e29b-41d4-a716-446655440002"
+  input_dataset_version: 1
+  materialization: eager
+  operations:
+    - order: 1
+      type: output
+      parameters: {}
+
+expected_output:
+  data:
+    rows:
+      - { product_id: 1, price: 100.0 }
+      - { product_id: 2, price: 200.0 }
+
+# Expected trace events (currently the mock executor doesn't generate traces)
+# This test will initially fail but demonstrates trace validation structure
+expected_trace:
+  - operation_order: 1
+    change_type: created
+    row_match:
+      product_id: 1
+      price: 100.0
+
+  - operation_order: 1
+    change_type: created
+    row_match:
+      product_id: 2
+      price: 200.0
+
+config:
+  match_mode: exact
+  validate_metadata: false
+  validate_traceability: true
+  snapshot_on_failure: true
