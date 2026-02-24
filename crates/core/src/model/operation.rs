@@ -3,6 +3,8 @@ use uuid::Uuid;
 
 use crate::model::Expression;
 
+use super::resolver::OutputDestination;
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum OperationKind {
@@ -85,4 +87,30 @@ where
         ExpressionInput::String(source) => Expression::from(source),
         ExpressionInput::Structured { source } => Expression::from(source),
     }))
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
+pub struct DeleteOperationParams {
+    #[serde(default)]
+    pub selector: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct OutputOperationParams {
+    pub destination: OutputDestination,
+    #[serde(default)]
+    pub include_deleted: bool,
+    #[serde(default)]
+    pub selector: Option<String>,
+}
+
+impl Default for OutputOperationParams {
+    fn default() -> Self {
+        Self {
+            destination: OutputDestination {
+                destination_type: "memory".to_string(),
+                target: None,
+            },
+            include_deleted: false,
+            selector: None,
+        }
+    }
 }

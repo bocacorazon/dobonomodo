@@ -108,7 +108,8 @@ impl MetadataStore for InMemoryMetadataStore {
         id: &Uuid,
         version: Option<i32>,
     ) -> std::result::Result<Dataset, MetadataStoreError> {
-        self.get_dataset_typed(id, version).map_err(map_metadata_error)
+        self.get_dataset_typed(id, version)
+            .map_err(map_metadata_error)
     }
 
     fn get_project(&self, id: &Uuid) -> std::result::Result<Project, MetadataStoreError> {
@@ -126,9 +127,11 @@ impl MetadataStore for InMemoryMetadataStore {
     ) -> std::result::Result<(), MetadataStoreError> {
         self.run_statuses
             .lock()
-            .map_err(|poisoned| map_metadata_error(MetadataError::LockPoisoned {
-                message: poisoned.to_string(),
-            }))?
+            .map_err(|poisoned| {
+                map_metadata_error(MetadataError::LockPoisoned {
+                    message: poisoned.to_string(),
+                })
+            })?
             .insert(*id, status);
         Ok(())
     }
@@ -138,8 +141,8 @@ impl MetadataStore for InMemoryMetadataStore {
 mod tests {
     use super::*;
     use dobo_core::model::{
-        ColumnDef, ColumnType, DatasetStatus, Materialization, OperationKind, OperationInstance,
-        ProjectStatus, ResolverStatus, ResolutionRule, ResolutionStrategy, TableRef, TemporalMode,
+        ColumnDef, ColumnType, DatasetStatus, Materialization, OperationInstance, OperationKind,
+        ProjectStatus, ResolutionRule, ResolutionStrategy, ResolverStatus, TableRef, TemporalMode,
         Visibility,
     };
     use std::collections::BTreeMap;

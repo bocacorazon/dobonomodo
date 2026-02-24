@@ -1,4 +1,7 @@
-use dobo_core::{DataLoader, DataLoaderError, MetadataStore, MetadataStoreError, OutputWriter, OutputWriterError, TraceWriter, TraceWriteError};
+use dobo_core::{
+    DataLoader, DataLoaderError, MetadataStore, MetadataStoreError, OutputWriter,
+    OutputWriterError, TraceWriteError, TraceWriter,
+};
 
 #[test]
 fn io_traits_are_publicly_importable() {
@@ -24,7 +27,9 @@ impl DataLoader for NoopLoader {
         _location: &dobo_core::model::ResolvedLocation,
         _schema: &dobo_core::model::TableRef,
     ) -> std::result::Result<polars::prelude::LazyFrame, DataLoaderError> {
-        Err(DataLoaderError::LoadFailed { message: "not implemented".to_string() })
+        Err(DataLoaderError::LoadFailed {
+            message: "not implemented".to_string(),
+        })
     }
 }
 
@@ -34,7 +39,9 @@ impl OutputWriter for NoopOutputWriter {
         _frame: &polars::prelude::DataFrame,
         _destination: &dobo_core::model::OutputDestination,
     ) -> std::result::Result<(), OutputWriterError> {
-        Err(OutputWriterError::WriteFailed { message: "not implemented".to_string() })
+        Err(OutputWriterError::WriteFailed {
+            message: "not implemented".to_string(),
+        })
     }
 }
 
@@ -44,15 +51,27 @@ impl MetadataStore for NoopMetadataStore {
         _id: &uuid::Uuid,
         _version: Option<i32>,
     ) -> std::result::Result<dobo_core::model::Dataset, MetadataStoreError> {
-        Err(MetadataStoreError::OperationFailed { message: "not implemented".to_string() })
+        Err(MetadataStoreError::OperationFailed {
+            message: "not implemented".to_string(),
+        })
     }
 
-    fn get_project(&self, _id: &uuid::Uuid) -> std::result::Result<dobo_core::model::Project, MetadataStoreError> {
-        Err(MetadataStoreError::OperationFailed { message: "not implemented".to_string() })
+    fn get_project(
+        &self,
+        _id: &uuid::Uuid,
+    ) -> std::result::Result<dobo_core::model::Project, MetadataStoreError> {
+        Err(MetadataStoreError::OperationFailed {
+            message: "not implemented".to_string(),
+        })
     }
 
-    fn get_resolver(&self, _id: &str) -> std::result::Result<dobo_core::model::Resolver, MetadataStoreError> {
-        Err(MetadataStoreError::OperationFailed { message: "not implemented".to_string() })
+    fn get_resolver(
+        &self,
+        _id: &str,
+    ) -> std::result::Result<dobo_core::model::Resolver, MetadataStoreError> {
+        Err(MetadataStoreError::OperationFailed {
+            message: "not implemented".to_string(),
+        })
     }
 
     fn update_run_status(
@@ -60,7 +79,9 @@ impl MetadataStore for NoopMetadataStore {
         _id: &uuid::Uuid,
         _status: dobo_core::model::RunStatus,
     ) -> std::result::Result<(), MetadataStoreError> {
-        Err(MetadataStoreError::OperationFailed { message: "not implemented".to_string() })
+        Err(MetadataStoreError::OperationFailed {
+            message: "not implemented".to_string(),
+        })
     }
 }
 
@@ -70,6 +91,8 @@ impl TraceWriter for NoopTraceWriter {
         _run_id: &uuid::Uuid,
         _events: &[dobo_core::trace::types::TraceEvent],
     ) -> std::result::Result<(), TraceWriteError> {
-        Err(TraceWriteError::WriteFailed { message: "not implemented".to_string() })
+        Err(TraceWriteError::WriteFailed {
+            message: "not implemented".to_string(),
+        })
     }
 }
