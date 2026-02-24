@@ -55,9 +55,12 @@ pub enum UpdateError {
     #[error("Failed to compile selector expression: {0}")]
     SelectorCompile(#[source] CompilationError),
     #[error("Failed to compile assignment for column '{column}': invalid expression (Schema / not found): {source}")]
+    SelectorCompile(#[source] CompilationError),
+    #[error("Failed to compile assignment for column '{column}': invalid expression (Schema / not found): {source}")]
     AssignmentCompile {
         column: String,
         #[source]
+        source: CompilationError,
         source: CompilationError,
     },
     #[error("Failed to inspect input schema before update: {0}")]
@@ -99,7 +102,36 @@ pub fn execute_update(
         working_dataset = working_dataset.with_columns(helper_exprs);
     }
 
+    let helper_aliases: Vec<String> = schema
+        .iter()
+        .map(|(name, _)| format!("input.{}", name.as_str()))
+        .collect();
+
+    let helper_exprs: Vec<Expr> = schema
+        .iter()
+        .map(|(name, _)| {
+            let base = name.as_str();
+            col(base).alias(format!("input.{base}"))
+        })
+        .collect();
+
+    let mut working_dataset = context.working_dataset.clone();
+    if !helper_exprs.is_empty() {
+        working_dataset = working_dataset.with_columns(helper_exprs);
+    }
+
     let default_selector_expr = default_selector_expr(&schema);
+    let dsl_context = build_compilation_context(&schema, context.run_timestamp, &context.selectors);
+    let resolved_selector = match operation.selector.as_deref() {
+        Some(raw_selector) => resolve_selector(raw_selector, &context.selectors)?,
+        None => None,
+    };
+
+    let selector_expr = match resolved_selector.as_deref() {
+        Some(resolved) => default_selector_expr
+            .clone()
+            .and(compile_selector(resolved, &dsl_context)?),
+        None => default_selector_expr.clone(),
     let dsl_context = build_compilation_context(&schema, context.run_timestamp, &context.selectors);
     let resolved_selector = match operation.selector.as_deref() {
         Some(raw_selector) => resolve_selector(raw_selector, &context.selectors)?,
@@ -116,6 +148,9 @@ pub fn execute_update(
     let applies_to_all_rows = resolved_selector.is_none() && !schema.contains("_deleted");
 
     let compiled_assignments = compile_assignments(&operation.assignments, &dsl_context)?;
+    let applies_to_all_rows = resolved_selector.is_none() && !schema.contains("_deleted");
+
+    let compiled_assignments = compile_assignments(&operation.assignments, &dsl_context)?;
 
     let mut assignment_exprs = Vec::with_capacity(compiled_assignments.len());
 
@@ -124,6 +159,20 @@ pub fn execute_update(
         .iter()
         .zip(compiled_assignments.into_iter())
     {
+        let assignment_expr = if applies_to_all_rows {
+            value_expr.alias(&assignment.column)
+        } else {
+            let fallback = if schema.contains(assignment.column.as_str()) {
+                col(&assignment.column)
+            } else {
+                lit(LiteralValue::Null)
+            };
+            when(selector_expr.clone())
+                .then(value_expr)
+                .otherwise(fallback)
+                .alias(&assignment.column)
+        };
+        assignment_exprs.push(assignment_expr);
         let assignment_expr = if applies_to_all_rows {
             value_expr.alias(&assignment.column)
         } else {
@@ -154,6 +203,7 @@ pub fn execute_update(
             .alias("_updated_at")
     };
     let mut output = working_dataset;
+    let mut output = working_dataset;
     output = output.with_columns(vec![updated_at_expr]);
     for expr in assignment_exprs {
         output = output.with_columns(vec![expr]);
@@ -172,9 +222,40 @@ pub fn execute_update(
                 .collect();
             output = output.with_columns(refresh_exprs);
         }
+        if !helper_aliases.is_empty() {
+            let current_schema = output.clone().collect_schema().map_err(UpdateError::OutputSchema)?;
+            let refresh_exprs: Vec<Expr> = current_schema
+                .iter()
+                .filter_map(|(name, _)| {
+                    let base = name.as_str();
+                    if helper_aliases.iter().any(|alias| alias == base) {
+                        None
+                    } else {
+                        Some(col(base).alias(format!("input.{base}")))
+                    }
+                })
+                .collect();
+            output = output.with_columns(refresh_exprs);
+        }
     }
 
     output.clone().collect_schema().map_err(UpdateError::OutputSchema)?;
+
+    if !helper_aliases.is_empty() {
+        let output_schema = output.clone().collect_schema().map_err(UpdateError::OutputSchema)?;
+        let projected_columns: Vec<Expr> = output_schema
+            .iter()
+            .filter_map(|(name, _)| {
+                let column_name = name.as_str();
+                if helper_aliases.iter().any(|alias| alias == column_name) {
+                    None
+                } else {
+                    Some(col(column_name))
+                }
+            })
+            .collect();
+        output = output.select(projected_columns);
+    }
 
     if !helper_aliases.is_empty() {
         let output_schema = output.clone().collect_schema().map_err(UpdateError::OutputSchema)?;
@@ -305,8 +386,17 @@ fn compile_selector(selector_expr: &str, context: &CompilationContext) -> Result
     compile_expression(&normalized, &ast, context)
         .map(|compiled| compiled.into_expr())
         .map_err(UpdateError::SelectorCompile)
+fn compile_selector(selector_expr: &str, context: &CompilationContext) -> Result<Expr> {
+    let normalized = normalize_update_expression(selector_expr);
+    let ast = parse_expression(&normalized)
+        .map_err(CompilationError::ParseFailure)
+        .map_err(UpdateError::SelectorCompile)?;
+    compile_expression(&normalized, &ast, context)
+        .map(|compiled| compiled.into_expr())
+        .map_err(UpdateError::SelectorCompile)
 }
 
+fn compile_assignments(assignments: &[Assignment], context: &CompilationContext) -> Result<Vec<Expr>> {
 fn compile_assignments(assignments: &[Assignment], context: &CompilationContext) -> Result<Vec<Expr>> {
     assignments
         .iter()
@@ -321,11 +411,120 @@ fn compile_assignments(assignments: &[Assignment], context: &CompilationContext)
             compile_expression(&normalized, &ast, context)
                 .map(|compiled| compiled.into_expr())
                 .map_err(|source| UpdateError::AssignmentCompile {
+            let normalized = normalize_update_expression(&assignment.expression);
+            let ast = parse_expression(&normalized)
+                .map_err(CompilationError::ParseFailure)
+                .map_err(|source| UpdateError::AssignmentCompile {
+                    column: assignment.column.clone(),
+                    source,
+                })?;
+            compile_expression(&normalized, &ast, context)
+                .map(|compiled| compiled.into_expr())
+                .map_err(|source| UpdateError::AssignmentCompile {
                     column: assignment.column.clone(),
                     source,
                 })
+                })
         })
         .collect()
+}
+
+fn build_compilation_context(
+    schema: &Schema,
+    run_timestamp: DateTime<Utc>,
+    selectors: &HashMap<String, String>,
+) -> CompilationContext {
+    let mut context = CompilationContext::new().with_today(run_timestamp.date_naive());
+
+    for (name, data_type) in schema.iter() {
+        let column_name = name.as_str();
+        let column_type = map_data_type_to_column_type(data_type);
+        context.add_column(column_name, column_type);
+        context.add_column(format!("input.{column_name}"), column_type);
+    }
+
+    for (name, expr) in selectors {
+        context.add_selector(name.clone(), expr.clone());
+    }
+
+    context
+}
+
+fn map_data_type_to_column_type(data_type: &DataType) -> ColumnType {
+    match data_type {
+        DataType::Boolean => ColumnType::Boolean,
+        DataType::String => ColumnType::String,
+        DataType::Date | DataType::Datetime(..) => ColumnType::Date,
+        DataType::Int8
+        | DataType::Int16
+        | DataType::Int32
+        | DataType::Int64
+        | DataType::UInt8
+        | DataType::UInt16
+        | DataType::UInt32
+        | DataType::UInt64
+        | DataType::Float32
+        | DataType::Float64 => ColumnType::Float,
+        _ => ColumnType::String,
+    }
+}
+
+fn normalize_update_expression(source: &str) -> String {
+    let mut result = String::with_capacity(source.len() + 16);
+    let chars: Vec<char> = source.chars().collect();
+    let mut index = 0usize;
+    let mut in_string = false;
+
+    while index < chars.len() {
+        let ch = chars[index];
+
+        if ch == '"' {
+            in_string = !in_string;
+            result.push(ch);
+            index += 1;
+            continue;
+        }
+
+        if in_string {
+            result.push(ch);
+            index += 1;
+            continue;
+        }
+
+        if ch == '_' || ch.is_ascii_alphabetic() {
+            let start = index;
+            index += 1;
+            while index < chars.len()
+                && (chars[index] == '_' || chars[index] == '.' || chars[index].is_ascii_alphanumeric())
+            {
+                index += 1;
+            }
+
+            let token: String = chars[start..index].iter().collect();
+            let upper = token.to_ascii_uppercase();
+            let mut lookahead = index;
+            while lookahead < chars.len() && chars[lookahead].is_whitespace() {
+                lookahead += 1;
+            }
+            let is_function = lookahead < chars.len() && chars[lookahead] == '(';
+
+            if token.contains('.')
+                || matches!(upper.as_str(), "AND" | "OR" | "NOT" | "TRUE" | "FALSE" | "NULL")
+                || is_function
+            {
+                result.push_str(&token);
+            } else {
+                result.push_str("input.");
+                result.push_str(&token);
+            }
+            continue;
+        }
+
+        result.push(ch);
+        index += 1;
+    }
+
+    result
 }
 
 fn build_compilation_context(
