@@ -1,6 +1,6 @@
 use std::collections::BTreeSet;
 
-use polars::prelude::{col, len, lit, DataFrame, DataType, IntoLazy, LazyFrame, NamedFrom, Series};
+use polars::prelude::{col, len, lit, DataFrame, IntoLazy, LazyFrame, NamedFrom, Series};
 use uuid::Uuid;
 
 use crate::dsl::aggregation::parse_aggregation;
@@ -14,9 +14,6 @@ use crate::model::{
     ResolvedLocation, Resolver,
 };
 use crate::{MetadataStore, MetadataStoreError};
-
-const INTERNAL_SOURCE_ROWS_LOADED: &str = "__dobo_source_rows_loaded";
-const INTERNAL_SOURCE_ROWS_AFTER_SELECTOR: &str = "__dobo_source_rows_after_selector";
 
 #[derive(Debug, Clone, Default)]
 pub struct AppendExecutionContext {
@@ -88,15 +85,14 @@ fn execute_append_lazy(
     operation: &AppendOperation,
     context: &AppendExecutionContext,
 ) -> Result<AppendResult, AppendError> {
-    let source_with_loaded_metric =
-        source_frame.with_columns([len().alias(INTERNAL_SOURCE_ROWS_LOADED)]);
-    let mut transformed = apply_soft_delete_filter_lazy(source_with_loaded_metric)?;
+    let source_rows_loaded = count_rows_lazy(source_frame.clone())?;
+    let mut transformed = apply_soft_delete_filter_lazy(source_frame)?;
 
     if let Some(selector) = &operation.source_selector {
         transformed = apply_source_selector_lazy(transformed, selector)?;
     }
 
-    transformed = transformed.with_columns([len().alias(INTERNAL_SOURCE_ROWS_AFTER_SELECTOR)]);
+    let source_rows_after_selector = count_rows_lazy(transformed.clone())?;
 
     if let Some(aggregation) = &operation.aggregation {
         validate_lazy_columns_exist(&transformed, &aggregation.group_by, "aggregation.group_by")?;
@@ -112,8 +108,7 @@ fn execute_append_lazy(
             }
         }
 
-        let internal_aggregation = with_internal_metrics_aggregation(aggregation);
-        transformed = apply_aggregation_lazy(transformed, &internal_aggregation)?;
+        transformed = apply_aggregation_lazy(transformed, aggregation)?;
     }
 
     let mut transformed = transformed
@@ -121,10 +116,6 @@ fn execute_append_lazy(
         .map_err(|error| AppendError::DataLoadError {
             message: error.to_string(),
         })?;
-    let source_rows_loaded = read_metric_column(&transformed, INTERNAL_SOURCE_ROWS_LOADED);
-    let source_rows_after_selector =
-        read_metric_column(&transformed, INTERNAL_SOURCE_ROWS_AFTER_SELECTOR);
-    transformed = drop_internal_metrics_columns(transformed)?;
 
     transformed = align_appended_schema(&transformed, working_frame)?;
 
@@ -378,7 +369,11 @@ fn get_source_dataset<M: MetadataStore>(
         })
 }
 
-fn map_dataset_lookup_error(error: MetadataStoreError, dataset_id: Uuid, version: Option<i32>) -> AppendError {
+fn map_dataset_lookup_error(
+    error: MetadataStoreError,
+    dataset_id: Uuid,
+    version: Option<i32>,
+) -> AppendError {
     match error {
         MetadataStoreError::DatasetNotFound { .. } => match version {
             Some(version) => AppendError::DatasetVersionNotFound {
@@ -441,65 +436,21 @@ fn apply_soft_delete_filter_lazy(frame: LazyFrame) -> Result<LazyFrame, AppendEr
     Ok(frame.filter(col("_deleted").eq(lit(false)).or(col("_deleted").is_null())))
 }
 
-fn with_internal_metrics_aggregation(
-    config: &crate::model::AppendAggregation,
-) -> crate::model::AppendAggregation {
-    let mut internal = config.clone();
-    if !internal
-        .aggregations
-        .iter()
-        .any(|aggregation| aggregation.column == INTERNAL_SOURCE_ROWS_LOADED)
-    {
-        internal.aggregations.push(crate::model::Aggregation {
-            column: INTERNAL_SOURCE_ROWS_LOADED.to_owned(),
-            expression: format!("MAX_AGG({INTERNAL_SOURCE_ROWS_LOADED})"),
-        });
-    }
-    if !internal
-        .aggregations
-        .iter()
-        .any(|aggregation| aggregation.column == INTERNAL_SOURCE_ROWS_AFTER_SELECTOR)
-    {
-        internal.aggregations.push(crate::model::Aggregation {
-            column: INTERNAL_SOURCE_ROWS_AFTER_SELECTOR.to_owned(),
-            expression: format!("MAX_AGG({INTERNAL_SOURCE_ROWS_AFTER_SELECTOR})"),
-        });
-    }
-    internal
-}
-
-fn read_metric_column(frame: &DataFrame, column: &str) -> usize {
+fn count_rows_lazy(frame: LazyFrame) -> Result<usize, AppendError> {
     frame
-        .column(column)
-        .ok()
-        .and_then(|series| series.cast(&DataType::UInt64).ok())
-        .and_then(|series| {
-            series
-                .u64()
-                .ok()
-                .and_then(|values| values.into_iter().next().flatten())
+        .select([len()])
+        .collect()
+        .map_err(|error| AppendError::DataLoadError {
+            message: error.to_string(),
         })
-        .unwrap_or(0) as usize
-}
-
-fn drop_internal_metrics_columns(mut frame: DataFrame) -> Result<DataFrame, AppendError> {
-    for column in [
-        INTERNAL_SOURCE_ROWS_LOADED,
-        INTERNAL_SOURCE_ROWS_AFTER_SELECTOR,
-    ] {
-        if frame
-            .get_column_names()
-            .iter()
-            .any(|existing| existing.as_str() == column)
-        {
-            frame
-                .drop_in_place(column)
-                .map_err(|error| AppendError::DataLoadError {
-                    message: error.to_string(),
-                })?;
-        }
-    }
-    Ok(frame)
+        .map(|count_frame| {
+            count_frame
+                .column("len")
+                .ok()
+                .and_then(|s| s.u32().ok())
+                .and_then(|v| v.into_iter().next().flatten())
+                .unwrap_or(0) as usize
+        })
 }
 
 fn select_resolution_rule<'a>(

@@ -1,8 +1,8 @@
+use criterion::{criterion_group, criterion_main, Criterion};
 use dobo_core::engine::append::{execute_append, AppendExecutionContext};
 use dobo_core::model::{AppendOperation, DatasetRef};
 use polars::df;
 use uuid::Uuid;
-use criterion::{criterion_group, criterion_main, Criterion};
 
 fn append_benchmark(c: &mut Criterion) {
     c.bench_function("append_10k_rows", |b| {
