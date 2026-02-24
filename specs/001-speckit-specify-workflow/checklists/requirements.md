@@ -32,3 +32,4 @@
 ## Notes
 
 - Validation iteration 1: all checklist items pass.
+- Ready for `/speckit.clarify` or `/speckit.plan`.
