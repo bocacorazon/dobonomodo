@@ -119,7 +119,16 @@ impl TestScenario {
             });
         }
 
-        // Extra input.data entries are allowed; they may be surfaced as warnings at execution time.
+        let mut unknown_tables: Vec<String> = provided_table_keys
+            .difference(&required_table_keys)
+            .cloned()
+            .collect();
+        unknown_tables.sort();
+        if !unknown_tables.is_empty() {
+            return Err(TestScenarioError::UnknownTableKeys {
+                tables: unknown_tables,
+            });
+        }
 
         // Validate expected output DataBlock
         self.expected_output.data.validate().map_err(|error| {
