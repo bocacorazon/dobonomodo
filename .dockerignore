@@ -1,0 +1,42 @@
+# Rust build artifacts
+target/
+debug/
+release/
+*.rlib
+*.prof*
+
+# IDE and editor files
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*~
+
+# Logs and temporary files
+*.log
+*.tmp
+.env*
+
+# Git directory
+.git/
+
+# Documentation and specs (not needed in image)
+docs/
+specs/
+*.md
+
+# Test files
+tests/
+**/*_test.rs
+
+# CI/CD
+.github/
+
+# Development tools
+.devcontainer/
+Dockerfile*
+.dockerignore
+node_modules/
+coverage/

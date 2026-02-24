@@ -1,8 +1,6 @@
 mod common;
 
-use dobo_core::model::{
-    Calendar, DataSource, Dataset, Expression, Period, Project, Resolver, Run,
-};
+use dobo_core::model::{Calendar, DataSource, Dataset, Expression, Period, Project, Resolver, Run};
 use serde::de::DeserializeOwned;
 use serde_yaml::Value;
 
