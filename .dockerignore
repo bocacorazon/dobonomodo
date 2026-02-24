@@ -1,5 +1,8 @@
 # Rust build outputs
 target/
+**/target/
+debug/
+release/
 .cargo-target/
 
 # VCS and Docker metadata
@@ -12,3 +15,9 @@ Dockerfile*
 .env*
 coverage/
 node_modules/
+.DS_Store
+Thumbs.db
+*.tmp
+*.swp
+.vscode/
+.idea/

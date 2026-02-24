@@ -1,0 +1,359 @@
+---
+
+description: "Task list for Test Harness feature implementation"
+---
+
+# Tasks: Test Harness
+
+**Input**: Design documents from `/workspace/specs/003-test-harness/`
+**Prerequisites**: plan.md ✓, spec.md ✓, research.md ✓, data-model.md ✓, contracts/cli-interface.md ✓, quickstart.md ✓
+
+**Tests**: Per constitutional principle I (TDD), tests are written FIRST where they enable the development approach. For this test harness, self-testing via passthrough scenarios validates the entire system.
+
+**Organization**: Tasks are grouped by user story to enable independent implementation and testing of each story.
+
+## Format: `- [ ] [ID] [P?] [Story?] Description`
+
+- **Checkbox**: All tasks start with `- [ ]` (markdown checkbox)
+- **[ID]**: Sequential task number (T001, T002, T003...)
+- **[P]**: Can run in parallel (different files, no dependencies)
+- **[Story]**: Which user story this task belongs to (US1, US2, US3, US4)
+- **Description**: Clear action with exact file path
+
+---
+
+## Phase 1: Setup (Shared Infrastructure)
+
+**Purpose**: Project initialization and dependency configuration
+
+- [X] T001 Add polars-testing dependency to crates/cli/Cargo.toml and crates/test-resolver/Cargo.toml
+- [X] T002 Add walkdir dependency to crates/cli/Cargo.toml for test suite discovery
+- [X] T003 [P] Create test scenarios directory structure: tests/scenarios/ and tests/scenarios/.snapshots/
+- [X] T004 [P] Verify uuid v7 feature enabled in /workspace/Cargo.toml dependencies
+- [X] T005 [P] Verify chrono dependency available in /workspace/Cargo.toml
+
+---
+
+## Phase 2: Foundational (Blocking Prerequisites)
+
+**Purpose**: Core entity models and trait definitions that ALL user stories depend on
+
+**⚠️ CRITICAL**: No user story work can begin until this phase is complete
+
+- [X] T006 Create TestScenario entity struct in crates/core/src/model/test_scenario.rs with serde derives
+- [X] T007 [P] Create PeriodDef entity struct in crates/core/src/model/test_scenario.rs
+- [X] T008 [P] Create TestInput entity struct in crates/core/src/model/test_scenario.rs
+- [X] T009 [P] Create DataBlock entity struct in crates/core/src/model/test_scenario.rs
+- [X] T010 [P] Create ProjectDef enum in crates/core/src/model/test_scenario.rs (Inline variant and Ref variant)
+- [X] T011 [P] Create TestOutput entity struct in crates/core/src/model/test_scenario.rs
+- [X] T012 [P] Create TestConfig entity struct in crates/core/src/model/test_scenario.rs with default values
+- [X] T013 [P] Create MatchMode enum in crates/core/src/model/test_scenario.rs (Exact, Subset variants)
+- [X] T014 [P] Create TestResult entity struct in crates/core/src/model/test_scenario.rs
+- [X] T015 [P] Create TestStatus enum in crates/core/src/model/test_scenario.rs (Pass, Fail, Error variants)
+- [X] T016 [P] Create DataMismatch entity struct in crates/core/src/model/test_scenario.rs
+- [X] T017 [P] Create MismatchType enum in crates/core/src/model/test_scenario.rs (MissingRow, ExtraRow, ValueMismatch)
+- [X] T018 [P] Create TraceAssertion entity struct in crates/core/src/model/test_scenario.rs
+- [X] T019 [P] Create TraceMismatch entity struct in crates/core/src/model/test_scenario.rs
+- [X] T020 [P] Create TraceMismatchType enum in crates/core/src/model/test_scenario.rs
+- [X] T021 [P] Create ErrorDetail entity struct in crates/core/src/model/test_scenario.rs
+- [X] T022 [P] Create ErrorType enum in crates/core/src/model/test_scenario.rs
+- [X] T023 Implement TestScenario::validate() method in crates/core/src/model/test_scenario.rs (DataBlock one-of constraint, period validation)
+- [X] T024 [P] Export all test entities from crates/core/src/model/mod.rs
+- [X] T025 Create test-resolver crate lib.rs with public module structure in crates/test-resolver/src/lib.rs
+
+**Checkpoint**: Foundation ready - user story implementation can now begin in parallel
+
+---
+
+## Phase 3: User Story 1 - Execute Single Test Scenario (Priority: P1) 🎯 MVP
+
+**Goal**: Parse YAML scenario, inject metadata, execute pipeline, compare output, report pass/fail
+
+**Independent Test**: Create passthrough scenario YAML, run `dobo test <file>`, verify test passes with correct metadata and output comparison
+
+### Implementation for User Story 1
+
+**Core Data Loading & Metadata Injection (test-resolver crate)**
+
+- [X] T026 [P] [US1] Create InMemoryDataLoader struct in crates/test-resolver/src/loader.rs implementing DataLoader trait
+- [X] T027 [P] [US1] Implement load() method in crates/test-resolver/src/loader.rs to serve LazyFrame from HashMap
+- [X] T028 [P] [US1] Create InMemoryMetadataStore struct in crates/test-resolver/src/metadata.rs implementing MetadataStore trait
+- [X] T029 [P] [US1] Implement get_dataset/get_project/get_run methods in crates/test-resolver/src/metadata.rs
+- [X] T030 [P] [US1] Create InMemoryTraceWriter struct in crates/test-resolver/src/trace.rs implementing TraceWriter trait
+- [X] T031 [US1] Create inject_system_metadata() function in crates/test-resolver/src/injection.rs generating UUIDs v7 and timestamps
+- [X] T032 [US1] Add inject_temporal_metadata() logic in crates/test-resolver/src/injection.rs based on temporal_mode
+- [X] T033 [US1] Create build_lazyframe() helper in crates/test-resolver/src/loader.rs to convert DataBlock rows to Polars LazyFrame
+- [X] T034 [US1] Add CSV file loading support in crates/test-resolver/src/loader.rs using polars::prelude::LazyCsvReader
+- [X] T035 [US1] Add Parquet file loading support in crates/test-resolver/src/loader.rs using polars::prelude::LazyFrame::scan_parquet
+
+**YAML Parsing (cli crate)**
+
+- [X] T036 [P] [US1] Create parse_scenario() function in crates/cli/src/harness/parser.rs using serde_yaml deserialization
+- [X] T037 [US1] Add error handling with anyhow::Context in crates/cli/src/harness/parser.rs for file read and YAML parse errors
+- [X] T038 [US1] Call TestScenario::validate() after parsing in crates/cli/src/harness/parser.rs
+
+**Output Comparison Engine (cli crate)**
+
+- [X] T039 [P] [US1] Create compare_output() function in crates/cli/src/harness/comparator.rs accepting actual/expected DataFrames and MatchMode
+- [X] T040 [US1] Implement Exact match mode in crates/cli/src/harness/comparator.rs using polars_testing::assert_dataframe_equal with order-insensitive option
+- [X] T041 [US1] Implement panic capture in crates/cli/src/harness/comparator.rs to collect mismatches from assert_dataframe_equal failures
+- [X] T042 [US1] Create parse_polars_error() helper in crates/cli/src/harness/comparator.rs to extract mismatch details from panic message
+- [X] T043 [US1] Implement strip_system_columns() in crates/cli/src/harness/comparator.rs to remove _row_id, _created_at, etc. unless validate_metadata=true
+- [X] T044 [US1] Create DataMismatch instances in crates/cli/src/harness/comparator.rs for each detected mismatch
+
+**Pipeline Execution (cli crate)**
+
+- [X] T045 [US1] Create execute_pipeline_mock() function in crates/cli/src/harness/executor.rs returning input unchanged (passthrough stub)
+- [X] T046 [US1] Add TODO comment in crates/cli/src/harness/executor.rs to replace with core::engine::execute_pipeline when S10 available
+
+**Test Orchestration (cli crate)**
+
+- [X] T047 [US1] Create execute_scenario() function in crates/cli/src/harness/executor.rs orchestrating full test execution flow
+- [X] T048 [US1] Instantiate InMemoryDataLoader in crates/cli/src/harness/executor.rs with test data
+- [X] T049 [US1] Call execute_pipeline_mock() in crates/cli/src/harness/executor.rs with loaded data
+- [X] T050 [US1] Call compare_output() in crates/cli/src/harness/executor.rs with actual vs expected data
+- [X] T051 [US1] Assemble TestResult in crates/cli/src/harness/executor.rs with status, warnings, mismatches
+
+**Result Reporting (cli crate)**
+
+- [X] T052 [P] [US1] Create report_result() function in crates/cli/src/harness/reporter.rs for human-readable output
+- [X] T053 [US1] Format PASS output in crates/cli/src/harness/reporter.rs showing row counts and validation summary
+- [X] T054 [US1] Format FAIL output in crates/cli/src/harness/reporter.rs listing all data mismatches
+- [X] T055 [US1] Format ERROR output in crates/cli/src/harness/reporter.rs showing error type and message
+- [X] T056 [US1] Create save_snapshot() function in crates/cli/src/harness/reporter.rs to write actual output YAML when snapshot_on_failure=true
+
+**CLI Integration (cli crate)**
+
+- [X] T057 [P] [US1] Create dobo test command struct in crates/cli/src/commands/test.rs with clap arguments
+- [X] T058 [US1] Add scenario_path argument in crates/cli/src/commands/test.rs (PathBuf, required)
+- [X] T059 [US1] Add --verbose, --no-snapshot, --output options in crates/cli/src/commands/test.rs
+- [X] T060 [US1] Implement command handler in crates/cli/src/commands/test.rs calling parse_scenario() and execute_scenario()
+- [X] T061 [US1] Map TestStatus to exit codes in crates/cli/src/commands/test.rs (Pass=0, Fail=1, Error=2)
+- [X] T062 [US1] Register test command in crates/cli/src/main.rs CLI app
+
+**Self-Test Validation**
+
+- [X] T063 [US1] Create tests/scenarios/harness-self-test.yaml passthrough scenario from quickstart.md
+- [X] T064 [US1] Run dobo test tests/scenarios/harness-self-test.yaml and verify PASS status
+
+**Checkpoint**: At this point, User Story 1 (single scenario execution) should be fully functional and testable independently
+
+---
+
+## Phase 4: User Story 2 - Validate with Multiple Match Modes (Priority: P2)
+
+**Goal**: Support exact and subset match modes for flexible output validation
+
+**Independent Test**: Create two scenarios (exact mode fails on extra rows, subset mode allows extra rows), verify behavior
+
+### Implementation for User Story 2
+
+- [X] T065 [P] [US2] Implement Subset match mode in crates/cli/src/harness/comparator.rs using DataFrame left_anti_join
+- [X] T066 [US2] Add find_missing_rows() helper in crates/cli/src/harness/comparator.rs for subset mode
+- [X] T067 [US2] Update compare_output() in crates/cli/src/harness/comparator.rs to branch on MatchMode enum
+- [X] T068 [US2] Create unit test in crates/cli/src/harness/comparator.rs verifying exact mode detects extra rows
+- [X] T069 [US2] Create unit test in crates/cli/src/harness/comparator.rs verifying subset mode allows extra rows
+- [X] T070 [US2] Create tests/scenarios/exact-match-test.yaml scenario with match_mode: exact
+- [X] T071 [US2] Create tests/scenarios/subset-match-test.yaml scenario with match_mode: subset
+- [X] T072 [US2] Run both test scenarios and verify correct pass/fail behavior
+
+**Checkpoint**: At this point, User Stories 1 AND 2 should both work independently
+
+---
+
+## Phase 5: User Story 3 - Validate Trace Events (Priority: P3)
+
+**Goal**: Validate pipeline execution produces expected trace events for traceability verification
+
+**Independent Test**: Create scenario with validate_traceability: true and trace_assertions, verify trace validation
+
+### Implementation for User Story 3
+
+- [X] T073 [P] [US3] Create validate_trace_events() function in crates/cli/src/harness/comparator.rs
+- [X] T074 [US3] Implement trace event matching in crates/cli/src/harness/comparator.rs by operation_order and change_type
+- [X] T075 [US3] Add row_match validation in crates/cli/src/harness/comparator.rs matching HashMap columns
+- [X] T076 [US3] Add expected_diff validation in crates/cli/src/harness/comparator.rs for Updated change_type
+- [X] T077 [US3] Create TraceMismatch instances in crates/cli/src/harness/comparator.rs for missing/extra/diff mismatches
+- [X] T078 [US3] Integrate validate_trace_events() in crates/cli/src/harness/executor.rs when validate_traceability=true
+- [X] T079 [US3] Add trace mismatches to TestResult in crates/cli/src/harness/executor.rs
+- [X] T080 [US3] Update report_result() in crates/cli/src/harness/reporter.rs to display trace mismatches
+- [X] T081 [US3] Create tests/scenarios/trace-validation-test.yaml scenario with trace assertions
+- [X] T082 [US3] Run trace validation scenario tests/scenarios/trace-validation-test.yaml and verify trace mismatch reporting in crates/cli/src/harness/reporter.rs
+
+**Checkpoint**: All user stories 1, 2, and 3 should now be independently functional
+
+---
+
+## Phase 6: User Story 4 - Execute Test Suite (Priority: P3)
+
+**Goal**: Execute all test scenarios in a directory with aggregated reporting
+
+**Independent Test**: Create directory with multiple scenarios, run `dobo test --suite <dir>`, verify aggregated results
+
+### Implementation for User Story 4
+
+- [X] T083 [P] [US4] Create discover_scenarios() function in crates/cli/src/harness/executor.rs using walkdir
+- [X] T084 [US4] Implement recursive YAML file search in crates/cli/src/harness/executor.rs with **/*.yaml and **/*.yml patterns
+- [X] T085 [US4] Filter out hidden files and underscore-prefixed files in crates/cli/src/harness/executor.rs
+- [X] T086 [US4] Sort discovered scenarios in crates/cli/src/harness/executor.rs for deterministic order
+- [X] T087 [US4] Create execute_suite() function in crates/cli/src/harness/executor.rs iterating over scenarios
+- [X] T088 [US4] Collect individual TestResult for each scenario in crates/cli/src/harness/executor.rs
+- [X] T089 [US4] Create SuiteResult struct in crates/core/src/model/test_scenario.rs with total/passed/failed/errors counts
+- [X] T090 [US4] Implement report_suite_result() in crates/cli/src/harness/reporter.rs with summary output
+- [X] T091 [US4] Add --suite <directory> flag in crates/cli/src/commands/test.rs
+- [X] T092 [US4] Update command handler in crates/cli/src/commands/test.rs to branch on suite vs single scenario mode
+- [X] T093 [US4] Map suite results to exit codes in crates/cli/src/commands/test.rs (all passed=0, any failed=1, any error=2)
+- [X] T094 [US4] Create tests/scenarios/suite-test/ directory with 3+ test scenarios
+- [X] T095 [US4] Run dobo test --suite tests/scenarios/suite-test/ and verify aggregated reporting
+
+**Checkpoint**: All user stories should now be independently functional
+
+---
+
+## Phase 7: Polish & Cross-Cutting Concerns
+
+**Purpose**: Improvements that affect multiple user stories and final validation
+
+- [X] T096 [P] Add order_sensitive support in crates/cli/src/harness/comparator.rs using DataFrameEqualOptions.with_check_row_order()
+- [X] T097 [P] Add JSON output format in crates/cli/src/harness/reporter.rs for --output json
+- [X] T098 [P] Add JUnit XML output format in crates/cli/src/harness/reporter.rs for --output junit
+- [X] T099 [P] Add ProjectRef version drift warning in crates/cli/src/harness/executor.rs when project versions differ
+- [X] T100 [P] Improve error messages in crates/cli/src/harness/parser.rs with file location and field paths
+- [X] T101 [P] Add verbose mode implementation in crates/cli/src/harness/reporter.rs showing all mismatches not just summary
+- [X] T102 [P] Create comprehensive unit tests for inject_system_metadata() in crates/test-resolver/src/injection.rs
+- [X] T103 [P] Create comprehensive unit tests for TestScenario::validate() in crates/core/src/model/test_scenario.rs
+- [X] T104 [P] Add integration test for external CSV file loading in crates/test-resolver/src/loader.rs
+- [X] T105 [P] Add integration test for external Parquet file loading in crates/test-resolver/src/loader.rs
+- [X] T106 Validate all /workspace/specs/003-test-harness/quickstart.md examples work end-to-end
+- [X] T107 Run cargo test for workspace defined by /workspace/Cargo.toml and verify all tests pass
+- [X] T108 Run cargo clippy for workspace defined by /workspace/Cargo.toml and fix any warnings
+- [X] T109 Run cargo fmt for workspace defined by /workspace/Cargo.toml to ensure formatting consistency
+- [X] T110 Update /workspace/README.md with test harness usage examples
+
+---
+
+## Dependencies & Execution Order
+
+### Phase Dependencies
+
+- **Setup (Phase 1)**: No dependencies - can start immediately
+- **Foundational (Phase 2)**: Depends on Setup completion - BLOCKS all user stories
+- **User Stories (Phase 3-6)**: All depend on Foundational phase completion
+  - User stories CAN proceed in parallel (if staffed)
+  - Or sequentially in priority order (US1 → US2 → US3 → US4)
+- **Polish (Phase 7)**: Depends on all user stories being complete
+
+### User Story Dependencies
+
+- **User Story 1 (P1)**: Can start after Foundational (Phase 2) - No dependencies on other stories - **MVP SCOPE**
+- **User Story 2 (P2)**: Can start after Foundational (Phase 2) - No dependencies on US1 (extends comparator independently)
+- **User Story 3 (P3)**: Can start after Foundational (Phase 2) - No dependencies on US1/US2 (adds trace validation independently)
+- **User Story 4 (P3)**: Can start after Foundational (Phase 2) - No dependencies on US1/US2/US3 (adds suite orchestration independently)
+
+### Within Each User Story
+
+- Entity models before services
+- Services before pipeline execution
+- Core implementation before CLI integration
+- Story complete before moving to next priority
+
+### Parallel Opportunities
+
+- **Setup (Phase 1)**: Tasks T003, T004, T005 can run in parallel
+- **Foundational (Phase 2)**: Tasks T007-T022 can run in parallel (all entity definitions)
+- **User Story 1**: 
+  - Tasks T026-T027, T028-T029, T030, T036, T039, T052, T057 can run in parallel (different files)
+  - Models: T026-T027 (loader), T028-T029 (metadata), T030 (trace) in parallel
+- **User Story 2**: Tasks T065, T068, T069 can run in parallel
+- **User Story 3**: Tasks T073, T081 can start in parallel
+- **User Story 4**: Tasks T083, T089 can run in parallel
+- **Polish (Phase 7)**: Tasks T096-T105 can run in parallel (all different files/modules)
+
+**Different user stories can be worked on in parallel by different team members after Phase 2 completes**
+
+---
+
+## Parallel Example: User Story 1
+
+```bash
+# After Foundational phase completes, launch all core components together:
+
+# Data loading components (different files, no dependencies):
+Task: "Create InMemoryDataLoader struct in crates/test-resolver/src/loader.rs"
+Task: "Create InMemoryMetadataStore struct in crates/test-resolver/src/metadata.rs"
+Task: "Create InMemoryTraceWriter struct in crates/test-resolver/src/trace.rs"
+
+# Harness components (different files, no dependencies):
+Task: "Create parse_scenario() function in crates/cli/src/harness/parser.rs"
+Task: "Create compare_output() function in crates/cli/src/harness/comparator.rs"
+Task: "Create report_result() function in crates/cli/src/harness/reporter.rs"
+Task: "Create dobo test command struct in crates/cli/src/commands/test.rs"
+```
+
+---
+
+## Implementation Strategy
+
+### MVP First (User Story 1 Only)
+
+1. Complete Phase 1: Setup → Dependencies configured
+2. Complete Phase 2: Foundational → All entity models ready (CRITICAL - blocks all stories)
+3. Complete Phase 3: User Story 1 → Single scenario execution working
+4. **STOP and VALIDATE**: Test User Story 1 independently with passthrough scenario
+5. Deploy/demo basic test harness capability
+
+**MVP Delivers**: Ability to run single YAML test scenarios with metadata injection, passthrough pipeline execution, and exact output comparison.
+
+### Incremental Delivery
+
+1. **Foundation** (Setup + Foundational) → Entity models and project structure ready
+2. **MVP** (+ User Story 1) → Single scenario execution → Test independently → Deploy/Demo
+3. **v1.1** (+ User Story 2) → Multiple match modes → Test independently → Deploy/Demo
+4. **v1.2** (+ User Story 3) → Trace validation → Test independently → Deploy/Demo
+5. **v1.3** (+ User Story 4) → Suite execution → Test independently → Deploy/Demo
+6. **v1.4** (+ Polish) → Production-ready harness
+
+Each story adds value without breaking previous stories.
+
+### Parallel Team Strategy
+
+With multiple developers after Phase 2 completes:
+
+- **Developer A**: User Story 1 (T026-T064) - Core single scenario execution
+- **Developer B**: User Story 2 (T065-T072) - Match mode variants
+- **Developer C**: User Story 3 (T073-T082) - Trace validation
+- **Developer D**: User Story 4 (T083-T095) - Suite execution
+
+Stories complete and integrate independently.
+
+---
+
+## Task Summary
+
+- **Total Tasks**: 110
+- **Setup Phase**: 5 tasks
+- **Foundational Phase**: 20 tasks (blocking)
+- **User Story 1 (P1 - MVP)**: 39 tasks
+- **User Story 2 (P2)**: 8 tasks
+- **User Story 3 (P3)**: 10 tasks
+- **User Story 4 (P3)**: 13 tasks
+- **Polish Phase**: 15 tasks
+
+**Parallel Opportunities**: 52 tasks marked [P] can run in parallel within their phase
+
+**MVP Scope**: Phase 1 + Phase 2 + Phase 3 (64 tasks total) delivers minimum viable test harness
+
+---
+
+## Notes
+
+- All tasks follow strict checklist format: `- [ ] T### [P?] [Story?] Description with file path`
+- [P] tasks target different files with no dependencies and can run in parallel
+- [Story] label (US1-US4) maps each task to specific user story for traceability
+- Each user story is independently completable and testable
+- Foundational phase MUST complete before any user story work begins
+- Test scenarios validate the test harness itself (self-hosting approach)
+- Pipeline execution is stubbed (passthrough) until S10 is implemented
+- Commit after each task or logical group
+- Stop at any checkpoint to validate story independently
+- Format validation: ALL tasks use checkbox `- [ ]`, task ID, optional [P]/[Story] labels, and file paths
