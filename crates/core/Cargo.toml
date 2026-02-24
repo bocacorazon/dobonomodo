@@ -14,3 +14,10 @@ serde_json.workspace = true
 serde_yaml.workspace = true
 thiserror.workspace = true
 uuid.workspace = true
+
+[dev-dependencies]
+criterion = "0.5"
+
+[[bench]]
+name = "dsl_benchmarks"
+harness = false

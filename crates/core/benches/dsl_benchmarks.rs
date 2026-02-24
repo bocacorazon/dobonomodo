@@ -1,9 +1,5 @@
-#![feature(test)]
-
-extern crate test;
-
+use criterion::{criterion_group, criterion_main, Criterion};
 use dobo_core::dsl::parse_expression;
-use test::Bencher;
 
 const EXPRESSIONS: [&str; 6] = [
     "transactions.amount_local * fx.rate",
@@ -14,12 +10,16 @@ const EXPRESSIONS: [&str; 6] = [
     "transactions.posting_date >= TODAY() - 30",
 ];
 
-#[bench]
-fn bench_parse_expression(b: &mut Bencher) {
+fn bench_parse_expression(c: &mut Criterion) {
     let mut idx: usize = 0;
-    b.iter(|| {
-        let source = EXPRESSIONS[idx % EXPRESSIONS.len()];
-        idx = idx.wrapping_add(1);
-        parse_expression(source).expect("benchmark expression should parse");
+    c.bench_function("parse_expression", |b| {
+        b.iter(|| {
+            let source = EXPRESSIONS[idx % EXPRESSIONS.len()];
+            idx = idx.wrapping_add(1);
+            parse_expression(source).expect("benchmark expression should parse");
+        });
     });
 }
+
+criterion_group!(benches, bench_parse_expression);
+criterion_main!(benches);
