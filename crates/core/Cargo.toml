@@ -10,6 +10,7 @@ lazy_static.workspace = true
 pest.workspace = true
 pest_derive.workspace = true
 polars.workspace = true
+regex = "1"
 serde.workspace = true
 serde_json.workspace = true
 serde_yaml.workspace = true
@@ -21,5 +22,5 @@ uuid.workspace = true
 criterion = "0.5"
 
 [[bench]]
-name = "dsl_benchmarks"
+name = "resolver_bench"
 harness = false

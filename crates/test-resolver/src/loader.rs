@@ -512,6 +512,8 @@ mod tests {
             table: Some("test_table".to_string()),
             schema: None,
             period_identifier: None,
+            resolver_id: None,
+            rule_name: None,
             catalog_response: None,
         };
 
@@ -538,6 +540,8 @@ mod tests {
             table: None,
             schema: None,
             period_identifier: None,
+            resolver_id: None,
+            rule_name: None,
             catalog_response: None,
         };
 
@@ -557,6 +561,8 @@ mod tests {
             table: Some("missing_table".to_string()),
             schema: None,
             period_identifier: None,
+            resolver_id: None,
+            rule_name: None,
             catalog_response: None,
         };
 
@@ -602,6 +608,8 @@ mod tests {
             table: Some("orders".to_string()),
             schema: None,
             period_identifier: None,
+            resolver_id: None,
+            rule_name: None,
             catalog_response: None,
         };
 
@@ -637,6 +645,8 @@ mod tests {
             table: Some("orders".to_string()),
             schema: None,
             period_identifier: None,
+            resolver_id: None,
+            rule_name: None,
             catalog_response: None,
         };
 
@@ -666,6 +676,8 @@ mod tests {
             table: Some("orders".to_string()),
             schema: None,
             period_identifier: None,
+            resolver_id: None,
+            rule_name: None,
             catalog_response: None,
         };
 
@@ -696,6 +708,8 @@ mod tests {
             table: Some("orders".to_string()),
             schema: None,
             period_identifier: None,
+            resolver_id: None,
+            rule_name: None,
             catalog_response: None,
         };
 
@@ -728,6 +742,8 @@ mod tests {
             table: Some("orders".to_string()),
             schema: None,
             period_identifier: None,
+            resolver_id: None,
+            rule_name: None,
             catalog_response: None,
         };
 
@@ -772,6 +788,8 @@ mod tests {
             table: Some("orders".to_string()),
             schema: None,
             period_identifier: None,
+            resolver_id: None,
+            rule_name: None,
             catalog_response: None,
         };
 

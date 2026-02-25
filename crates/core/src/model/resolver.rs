@@ -78,6 +78,10 @@ pub struct ResolvedLocation {
     #[serde(default)]
     pub period_identifier: Option<String>,
     #[serde(default)]
+    pub resolver_id: Option<String>,
+    #[serde(default)]
+    pub rule_name: Option<String>,
+    #[serde(default)]
     pub catalog_response: Option<serde_json::Value>,
 }
 

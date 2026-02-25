@@ -3,6 +3,8 @@
 Auto-generated from all feature plans. Last updated: 2026-02-22
 
 ## Active Technologies
+- Rust 1.93.1 (edition 2021) + serde/serde_json (serialization), uuid (identifiers), chrono (date handling), polars (data processing context) (012-resolver-engine)
+- PostgreSQL (entity metadata), object storage (trace files), file/database/catalog via DataSource adapters (012-resolver-engine)
 - Rust 1.75+ (edition 2021) + polars (dataframe operations), serde (serialization), anyhow/thiserror (error handling) (010-output-operation)
 - In-memory dataframes (Polars LazyFrame/DataFrame); output via OutputWriter trait (010-output-operation)
 - Rust 2021 edition + Polars 0.46 (DataFrame processing), Serde (serialization), UUID v7, Chrono (009-append-operation)
@@ -41,6 +43,8 @@ crates/
 Rust (stable toolchain policy; project MSRV to be pinned when CI toolchain baseline is introduced): Follow standard conventions
 
 ## Recent Changes
+- 012-resolver-engine: Added Rust 1.93.1 (edition 2021) + serde/serde_json (serialization), uuid (identifiers), chrono (date handling), polars (data processing context)
+- 012-resolver-engine: Added Rust 1.93.1 (edition 2021) + serde/serde_json (serialization), uuid (identifiers), chrono (date handling), polars (data processing context)
 - 010-output-operation: Added Rust 1.75+ (edition 2021) + polars (dataframe operations), serde (serialization), anyhow/thiserror (error handling)
 - 009-append-operation: Added Rust 2021 edition + Polars 0.46 (DataFrame processing), Serde (serialization), UUID v7, Chrono
 - 001-aggregate-operation: Added Rust 1.75+ (edition 2021) + Polars 0.46 (lazy API for DataFrames), serde/serde_json, uuid v7, anyhow/thiserror
@@ -49,6 +53,8 @@ Rust (stable toolchain policy; project MSRV to be pinned when CI toolchain basel
 - 005-update-operation: Added Rust 1.75+ (Rust 2021 edition) + Polars 0.46 (lazy API), serde, serde_json, serde_yaml, anyhow, thiserror
 - 002-dsl-parser: Added Rust 2021 edition (workspace baseline: 0.1.0)
 - 003-test-harness: Added Rust (stable toolchain policy; project MSRV deferred to CI baseline) + `polars` (lazy feature), `serde`, `serde_yaml`, `uuid` (v7 feature), `chrono`, `anyhow`/`thiserror`
+
+- 001-workspace-scaffold: Added Rust (stable toolchain policy; project MSRV to be pinned when CI toolchain baseline is introduced) + `polars` (lazy feature), `serde`, `serde_yaml`, `serde_json`, `uuid`, `chrono`, `anyhow`/`thiserror`
 
 
 <!-- MANUAL ADDITIONS START -->

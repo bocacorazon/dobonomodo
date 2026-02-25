@@ -169,6 +169,8 @@ fn execute_scenario_with_base_dir_and_store(
                 table: Some("output".to_string()),
                 schema: None,
                 period_identifier: None,
+                resolver_id: None,
+                rule_name: None,
                 catalog_response: None,
             };
 
@@ -594,6 +596,8 @@ fn execute_pipeline_mock(
         table: Some(table_name.to_string()),
         schema: None,
         period_identifier: None,
+        resolver_id: None,
+        rule_name: None,
         catalog_response: None,
     };
 
