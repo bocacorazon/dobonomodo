@@ -7,7 +7,9 @@ use polars::prelude::*;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-use crate::dsl::{compile_expression, parse_expression, ColumnType, CompilationContext, CompilationError};
+use crate::dsl::{
+    compile_expression, parse_expression, ColumnType, CompilationContext, CompilationError,
+};
 
 /// Runtime configuration for an update operation.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -54,7 +56,9 @@ pub enum UpdateError {
     SelectorNotDefined(String),
     #[error("Failed to compile selector expression: {0}")]
     SelectorCompile(#[source] CompilationError),
-    #[error("Failed to compile assignment for column '{column}': invalid expression (Schema / not found): {source}")]
+    #[error(
+        "Failed to compile assignment for column '{column}': invalid expression (Schema / not found): {source}"
+    )]
     AssignmentCompile {
         column: String,
         #[source]
@@ -114,11 +118,9 @@ pub fn execute_update(
     };
 
     let applies_to_all_rows = resolved_selector.is_none() && !schema.contains("_deleted");
-
     let compiled_assignments = compile_assignments(&operation.assignments, &dsl_context)?;
 
     let mut assignment_exprs = Vec::with_capacity(compiled_assignments.len());
-
     for (assignment, value_expr) in operation
         .assignments
         .iter()
@@ -156,10 +158,15 @@ pub fn execute_update(
 
     let mut output = working_dataset;
     output = output.with_columns(vec![updated_at_expr]);
+
     for expr in assignment_exprs {
         output = output.with_columns(vec![expr]);
+
         if !helper_aliases.is_empty() {
-            let current_schema = output.clone().collect_schema().map_err(UpdateError::OutputSchema)?;
+            let current_schema = output
+                .clone()
+                .collect_schema()
+                .map_err(UpdateError::OutputSchema)?;
             let refresh_exprs: Vec<Expr> = current_schema
                 .iter()
                 .filter_map(|(name, _)| {
@@ -175,10 +182,16 @@ pub fn execute_update(
         }
     }
 
-    output.clone().collect_schema().map_err(UpdateError::OutputSchema)?;
+    output
+        .clone()
+        .collect_schema()
+        .map_err(UpdateError::OutputSchema)?;
 
     if !helper_aliases.is_empty() {
-        let output_schema = output.clone().collect_schema().map_err(UpdateError::OutputSchema)?;
+        let output_schema = output
+            .clone()
+            .collect_schema()
+            .map_err(UpdateError::OutputSchema)?;
         let projected_columns: Vec<Expr> = output_schema
             .iter()
             .filter_map(|(name, _)| {
@@ -308,7 +321,10 @@ fn compile_selector(selector_expr: &str, context: &CompilationContext) -> Result
         .map_err(UpdateError::SelectorCompile)
 }
 
-fn compile_assignments(assignments: &[Assignment], context: &CompilationContext) -> Result<Vec<Expr>> {
+fn compile_assignments(
+    assignments: &[Assignment],
+    context: &CompilationContext,
+) -> Result<Vec<Expr>> {
     assignments
         .iter()
         .map(|assignment| {
@@ -395,7 +411,9 @@ fn normalize_update_expression(source: &str) -> String {
             let start = index;
             index += 1;
             while index < chars.len()
-                && (chars[index] == '_' || chars[index] == '.' || chars[index].is_ascii_alphanumeric())
+                && (chars[index] == '_'
+                    || chars[index] == '.'
+                    || chars[index].is_ascii_alphanumeric())
             {
                 index += 1;
             }
@@ -409,7 +427,10 @@ fn normalize_update_expression(source: &str) -> String {
             let is_function = lookahead < chars.len() && chars[lookahead] == '(';
 
             if token.contains('.')
-                || matches!(upper.as_str(), "AND" | "OR" | "NOT" | "TRUE" | "FALSE" | "NULL")
+                || matches!(
+                    upper.as_str(),
+                    "AND" | "OR" | "NOT" | "TRUE" | "FALSE" | "NULL"
+                )
                 || is_function
             {
                 result.push_str(&token);

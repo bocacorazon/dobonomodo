@@ -147,11 +147,16 @@ impl OutputWriter for RecordingWriter {
         destination: &OutputDestination,
     ) -> std::result::Result<(), OutputWriterError> {
         let mut writes = self.writes.lock().expect("recording writer mutex poisoned");
-        writes.push((
-            frame.height(),
-            destination.destination_type.clone(),
-            destination.target.clone(),
-        ));
+        let (dest_type, dest_target) = match destination {
+            OutputDestination::Table {
+                datasource_id,
+                table,
+                ..
+            } => (datasource_id.clone(), Some(table.clone())),
+            // Use the datasource_id field (table name) or "location" label for file-based destinations.
+            OutputDestination::Location { path } => ("location".to_string(), Some(path.clone())),
+        };
+        writes.push((frame.height(), dest_type, dest_target));
         Ok(())
     }
 }

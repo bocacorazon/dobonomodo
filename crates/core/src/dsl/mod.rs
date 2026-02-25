@@ -51,10 +51,12 @@ use std::collections::BTreeMap;
 use anyhow::{bail, Result};
 use polars::prelude::{col, lit, Expr};
 
+pub mod aggregation;
 pub mod ast;
 pub mod compiler;
 pub mod context;
 pub mod error;
+pub mod expression;
 pub mod interpolation;
 pub mod parser;
 pub mod types;

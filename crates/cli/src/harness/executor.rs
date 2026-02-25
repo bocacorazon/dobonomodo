@@ -536,6 +536,7 @@ fn validate_file_temporal_columns(
     let required_columns: &[&str] = match temporal_mode {
         TemporalMode::Period => &["_period"],
         TemporalMode::Bitemporal => &["_period_from", "_period_to"],
+        TemporalMode::Snapshot => &[],
     };
 
     let mut temporal_columns = Vec::new();
