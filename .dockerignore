@@ -16,16 +16,29 @@ Dockerfile*
 .dockerignore
 
 # Common transient files
+*.log
 *.log*
 .env*
 coverage/
-.cargo-target/
 dist/
 build/
 .DS_Store
 Thumbs.db
 *.tmp
 *.swp
+*.swo
+*~
 .vscode/
 .idea/
+
+# Documentation/specs/tests not needed in image
+docs/
+specs/
+*.md
+tests/
+**/*_test.rs
+
+# CI/dev tooling
+.github/
+.devcontainer/
 node_modules/

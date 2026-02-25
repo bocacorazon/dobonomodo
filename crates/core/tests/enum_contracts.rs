@@ -23,6 +23,10 @@ fn enums_roundtrip_with_serde_json() {
     let encoded = serde_json::to_string(&temporal_mode).expect("encode should work");
     let decoded: TemporalMode = serde_json::from_str(&encoded).expect("decode should work");
     assert_eq!(decoded, TemporalMode::Period);
+    let temporal_mode = TemporalMode::Snapshot;
+    let encoded = serde_json::to_string(&temporal_mode).expect("encode should work");
+    let decoded: TemporalMode = serde_json::from_str(&encoded).expect("decode should work");
+    assert_eq!(decoded, TemporalMode::Snapshot);
 
     let column_type = ColumnType::String;
     let encoded = serde_json::to_string(&column_type).expect("encode should work");

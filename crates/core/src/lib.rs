@@ -9,6 +9,7 @@ pub mod trace;
 pub mod validation;
 
 pub use engine::io_traits::{DataLoader, DataLoaderError, OutputWriter, OutputWriterError};
+pub use engine::ops::output::DatasetRegistrationStore;
 pub use error::{CoreError, Result};
 pub use execution::pipeline::{execute_pipeline, execute_pipeline_with_output_writer};
 pub use model::metadata_store::{MetadataStore, MetadataStoreError};

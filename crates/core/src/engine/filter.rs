@@ -50,6 +50,7 @@ pub fn apply_filter(df: LazyFrame, context: &FilterContext) -> PolarsResult<Lazy
             apply_period_filter(df, &context.period)
         }
         TemporalMode::Bitemporal => apply_bitemporal_filter(df, &context.period),
+        TemporalMode::Snapshot => Ok(df),
     }
 }
 
@@ -184,9 +185,13 @@ fn target_expr_for_dtype(target_date: NaiveDate, dtype: &DataType) -> PolarsResu
             let timestamp = match unit {
                 TimeUnit::Milliseconds => midnight.and_utc().timestamp_millis(),
                 TimeUnit::Microseconds => midnight.and_utc().timestamp_micros(),
-                TimeUnit::Nanoseconds => midnight.and_utc().timestamp_nanos_opt().ok_or_else(|| {
-                    PolarsError::ComputeError("Datetime nanosecond conversion overflowed".into())
-                })?,
+                TimeUnit::Nanoseconds => {
+                    midnight.and_utc().timestamp_nanos_opt().ok_or_else(|| {
+                        PolarsError::ComputeError(
+                            "Datetime nanosecond conversion overflowed".into(),
+                        )
+                    })?
+                }
             };
 
             Ok(lit(timestamp).cast(DataType::Datetime(*unit, tz.clone())))

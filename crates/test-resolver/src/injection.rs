@@ -112,6 +112,7 @@ fn ensure_temporal_columns(
                 table_name,
             )?;
         }
+        TemporalMode::Snapshot => {}
     }
 
     Ok(())
@@ -167,6 +168,7 @@ pub fn inject_temporal_metadata(
                 row.insert("_period_to".to_string(), Value::String(to.to_string()));
             }
         }
+        TemporalMode::Snapshot => {}
     }
     row
 }
