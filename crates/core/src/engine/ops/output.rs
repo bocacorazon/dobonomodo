@@ -512,47 +512,45 @@ pub fn execute_output_with_registration_store_and_warning_logger(
         .collect();
     let rows_written = output_df.height();
 
+    fn try_register_with_warning(
+        register_name: &str,
+        destination: &ModelOutputDestination,
+        output_df: &DataFrame,
+        registration_store: &dyn DatasetRegistrationStore,
+        warning_logger: &dyn OutputWarningLogger,
+    ) -> Option<Uuid> {
+        match register_dataset(register_name, destination, output_df, registration_store) {
+            Ok(registered_id) => Some(registered_id),
+            Err(error) => {
+                warning_logger.warn(OutputWarning {
+                    code: "output.registration.failed",
+                    dataset_name: register_name.to_string(),
+                    reason: registration_warning_reason(&error),
+                });
+                None
+            }
+        }
+    }
+
     let mut dataset_id = None;
     if let Some(register_name) = registration_name {
         if let Some(registration_store) = registration_store {
-            match register_dataset(
+            dataset_id = try_register_with_warning(
                 register_name,
                 &operation.destination,
                 &output_df,
                 registration_store,
-            ) {
-                Ok(registered_id) => {
-                    dataset_id = Some(registered_id);
-                }
-                Err(error) => {
-                    let warning = OutputWarning {
-                        code: "output.registration.failed",
-                        dataset_name: register_name.to_string(),
-                        reason: registration_warning_reason(&error),
-                    };
-                    warning_logger.warn(warning);
-                }
-            }
+                warning_logger,
+            );
         } else if let Some(metadata_store) = metadata_store {
             let metadata_registration_adapter = MetadataStoreRegistrationAdapter { metadata_store };
-            match register_dataset(
+            dataset_id = try_register_with_warning(
                 register_name,
                 &operation.destination,
                 &output_df,
                 &metadata_registration_adapter,
-            ) {
-                Ok(registered_id) => {
-                    dataset_id = Some(registered_id);
-                }
-                Err(error) => {
-                    let warning = OutputWarning {
-                        code: "output.registration.failed",
-                        dataset_name: register_name.to_string(),
-                        reason: registration_warning_reason(&error),
-                    };
-                    warning_logger.warn(warning);
-                }
-            }
+                warning_logger,
+            );
         }
     }
 
