@@ -1,10 +1,31 @@
-node_modules/
+# Rust build outputs
+target/
+**/target/
+debug/
+release/
+.cargo-target/
+
+*.rs.bk
+*.rlib
+*.prof*
+
+# VCS and Docker metadata
 .git/
+.gitignore
 Dockerfile*
 .dockerignore
+
+# Common transient files
 *.log*
 .env*
 coverage/
-target/
-debug/
-release/
+.cargo-target/
+dist/
+build/
+.DS_Store
+Thumbs.db
+*.tmp
+*.swp
+.vscode/
+.idea/
+node_modules/

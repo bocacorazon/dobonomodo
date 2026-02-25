@@ -372,7 +372,7 @@ fn compile_function(
                         .to_string(),
                 }
             })?;
-            lit(today)
+            lit(today).cast(DataType::Date)
         }
         "YEAR" => require_arg(&compiled_args, &normalized)?.dt().year(),
         "MONTH" => require_arg(&compiled_args, &normalized)?.dt().month(),

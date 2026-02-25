@@ -245,6 +245,7 @@ fn render_location(
                 period_identifier: Some(context.period.identifier.clone()),
                 resolver_id: Some(resolver_id.to_string()),
                 rule_name: Some(rule.name.clone()),
+                catalog_response: None,
             }
         }
         ResolutionStrategy::Table {
@@ -268,6 +269,7 @@ fn render_location(
                 period_identifier: Some(context.period.identifier.clone()),
                 resolver_id: Some(resolver_id.to_string()),
                 rule_name: Some(rule.name.clone()),
+                catalog_response: None,
             }
         }
         ResolutionStrategy::Catalog {
@@ -290,12 +292,6 @@ fn render_location(
                 .transpose()?;
             let rendered_params = render_catalog_template_value(params, &template_ctx)?;
             let rendered_headers = render_catalog_template_value(headers, &template_ctx)?;
-            let _catalog_metadata = (
-                rendered_method,
-                rendered_auth,
-                rendered_params,
-                rendered_headers,
-            );
 
             ResolvedLocation {
                 datasource_id: "catalog".to_string(),
@@ -305,6 +301,12 @@ fn render_location(
                 period_identifier: Some(context.period.identifier.clone()),
                 resolver_id: Some(resolver_id.to_string()),
                 rule_name: Some(rule.name.clone()),
+                catalog_response: Some(serde_json::json!({
+                    "method": rendered_method,
+                    "auth": rendered_auth,
+                    "params": rendered_params,
+                    "headers": rendered_headers,
+                })),
             }
         }
     };

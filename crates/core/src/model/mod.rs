@@ -8,6 +8,7 @@ pub mod period;
 pub mod project;
 pub mod resolver;
 pub mod run;
+pub mod test_scenario;
 
 pub use calendar::*;
 pub use dataset::*;
@@ -18,3 +19,4 @@ pub use period::*;
 pub use project::*;
 pub use resolver::*;
 pub use run::*;
+pub use test_scenario::*;

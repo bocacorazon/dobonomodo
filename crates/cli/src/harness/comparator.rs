@@ -1,0 +1,1044 @@
+use anyhow::{bail, Result};
+use chrono::DateTime;
+use dobo_core::model::{
+    DataMismatch, MatchMode, MismatchType, TraceAssertion, TraceChangeType, TraceMismatch,
+    TraceMismatchType,
+};
+use polars::prelude::*;
+use std::collections::{BTreeMap, HashMap};
+use uuid::Uuid;
+
+type Row = HashMap<String, serde_json::Value>;
+type Rows = Vec<Row>;
+
+/// Compare actual output to expected output
+pub fn compare_output(
+    actual: &DataFrame,
+    expected: &DataFrame,
+    mode: MatchMode,
+    validate_metadata: bool,
+    order_sensitive: bool,
+) -> Result<Vec<DataMismatch>> {
+    // Strip system columns unless validating metadata
+    let actual_clean = if validate_metadata {
+        actual.clone()
+    } else {
+        strip_system_columns(actual)?
+    };
+
+    let expected_clean = if validate_metadata {
+        expected.clone()
+    } else {
+        strip_system_columns(expected)?
+    };
+
+    ensure_matching_schema(&actual_clean, &expected_clean)?;
+
+    match mode {
+        MatchMode::Exact => compare_exact(
+            &actual_clean,
+            &expected_clean,
+            order_sensitive,
+            validate_metadata,
+        ),
+        MatchMode::Subset => compare_subset(
+            &actual_clean,
+            &expected_clean,
+            order_sensitive,
+            validate_metadata,
+        ),
+    }
+}
+
+fn ensure_matching_schema(actual: &DataFrame, expected: &DataFrame) -> Result<()> {
+    let actual_schema = schema_map(actual);
+    let expected_schema = schema_map(expected);
+
+    if actual_schema != expected_schema {
+        bail!(
+            "Schema mismatch: expected schema {:?}, actual schema {:?}",
+            expected_schema,
+            actual_schema
+        );
+    }
+
+    Ok(())
+}
+
+fn schema_map(frame: &DataFrame) -> BTreeMap<String, DataType> {
+    frame
+        .get_columns()
+        .iter()
+        .map(|column| (column.name().to_string(), column.dtype().clone()))
+        .collect()
+}
+
+/// Strip system columns (those starting with _) from DataFrame
+pub fn strip_system_columns(df: &DataFrame) -> Result<DataFrame> {
+    let business_cols: Vec<String> = df
+        .get_column_names()
+        .iter()
+        .filter(|col| !col.starts_with('_'))
+        .map(|s| s.to_string())
+        .collect();
+
+    Ok(df.select(business_cols)?)
+}
+
+/// Compare in exact mode (all rows must match, no extras allowed)
+/// T096: Add order_sensitive support
+fn compare_exact(
+    actual: &DataFrame,
+    expected: &DataFrame,
+    order_sensitive: bool,
+    validate_metadata: bool,
+) -> Result<Vec<DataMismatch>> {
+    let mut mismatches = Vec::new();
+
+    if order_sensitive {
+        // Order-sensitive comparison: check row-by-row in order
+        let actual_rows = dataframe_to_rows(actual)?;
+        let expected_rows = dataframe_to_rows(expected)?;
+
+        let max_len = actual_rows.len().max(expected_rows.len());
+
+        for idx in 0..max_len {
+            match (actual_rows.get(idx), expected_rows.get(idx)) {
+                (Some(actual_row), Some(expected_row)) => {
+                    if !rows_equal(expected_row, actual_row, validate_metadata) {
+                        // Row values differ
+                        let differing_columns =
+                            find_differing_columns(expected_row, actual_row, validate_metadata);
+                        mismatches.push(DataMismatch {
+                            mismatch_type: MismatchType::ValueMismatch,
+                            expected: Some(expected_row.clone()),
+                            actual: Some(actual_row.clone()),
+                            differing_columns,
+                        });
+                    }
+                }
+                (Some(actual_row), None) => {
+                    // Extra row in actual
+                    mismatches.push(DataMismatch {
+                        mismatch_type: MismatchType::ExtraRow,
+                        expected: None,
+                        actual: Some(actual_row.clone()),
+                        differing_columns: vec![],
+                    });
+                }
+                (None, Some(expected_row)) => {
+                    // Missing row in actual
+                    mismatches.push(DataMismatch {
+                        mismatch_type: MismatchType::MissingRow,
+                        expected: Some(expected_row.clone()),
+                        actual: None,
+                        differing_columns: vec![],
+                    });
+                }
+                (None, None) => unreachable!(),
+            }
+        }
+    } else {
+        // Order-insensitive exact comparison with multiplicity and value-diff pairing.
+        let (mut expected_unmatched, mut actual_unmatched) = split_unmatched_rows(
+            dataframe_to_rows(expected)?,
+            dataframe_to_rows(actual)?,
+            validate_metadata,
+        );
+
+        while let Some((expected_idx, actual_idx, differing_columns)) =
+            best_non_exact_value_mismatch_pair(
+                &expected_unmatched,
+                &actual_unmatched,
+                validate_metadata,
+            )
+        {
+            let expected_row = expected_unmatched.swap_remove(expected_idx);
+            let actual_row = actual_unmatched.swap_remove(actual_idx);
+
+            mismatches.push(DataMismatch {
+                mismatch_type: MismatchType::ValueMismatch,
+                expected: Some(expected_row),
+                actual: Some(actual_row),
+                differing_columns,
+            });
+        }
+
+        for row in expected_unmatched {
+            mismatches.push(DataMismatch {
+                mismatch_type: MismatchType::MissingRow,
+                expected: Some(row),
+                actual: None,
+                differing_columns: vec![],
+            });
+        }
+
+        for row in actual_unmatched {
+            mismatches.push(DataMismatch {
+                mismatch_type: MismatchType::ExtraRow,
+                expected: None,
+                actual: Some(row),
+                differing_columns: vec![],
+            });
+        }
+    }
+
+    Ok(mismatches)
+}
+
+/// Compare in subset mode (expected rows must exist in actual, extra rows tolerated)
+fn compare_subset(
+    actual: &DataFrame,
+    expected: &DataFrame,
+    order_sensitive: bool,
+    validate_metadata: bool,
+) -> Result<Vec<DataMismatch>> {
+    let (mut expected_unmatched, mut actual_unmatched) = if order_sensitive {
+        split_unmatched_rows_ordered_subset(
+            dataframe_to_rows(expected)?,
+            dataframe_to_rows(actual)?,
+            validate_metadata,
+        )
+    } else {
+        split_unmatched_rows(
+            dataframe_to_rows(expected)?,
+            dataframe_to_rows(actual)?,
+            validate_metadata,
+        )
+    };
+
+    let mut mismatches = Vec::new();
+
+    while let Some((expected_idx, actual_idx, differing_columns)) =
+        best_non_exact_value_mismatch_pair(
+            &expected_unmatched,
+            &actual_unmatched,
+            validate_metadata,
+        )
+    {
+        let expected_row = expected_unmatched.swap_remove(expected_idx);
+        let actual_row = actual_unmatched.swap_remove(actual_idx);
+
+        mismatches.push(DataMismatch {
+            mismatch_type: MismatchType::ValueMismatch,
+            expected: Some(expected_row),
+            actual: Some(actual_row),
+            differing_columns,
+        });
+    }
+
+    for row in expected_unmatched {
+        mismatches.push(DataMismatch {
+            mismatch_type: MismatchType::MissingRow,
+            expected: Some(row),
+            actual: None,
+            differing_columns: vec![],
+        });
+    }
+
+    Ok(mismatches)
+}
+
+fn split_unmatched_rows(
+    left_rows: Rows,
+    right_rows: Rows,
+    validate_metadata: bool,
+) -> (Rows, Rows) {
+    let mut right_consumed = vec![false; right_rows.len()];
+    let mut left_unmatched = Vec::new();
+
+    for left_row in left_rows {
+        let matched_idx = right_rows
+            .iter()
+            .enumerate()
+            .find(|(idx, right_row)| {
+                !right_consumed[*idx] && rows_equal(&left_row, right_row, validate_metadata)
+            })
+            .map(|(idx, _)| idx);
+
+        if let Some(idx) = matched_idx {
+            right_consumed[idx] = true;
+        } else {
+            left_unmatched.push(left_row);
+        }
+    }
+
+    let right_unmatched = right_rows
+        .into_iter()
+        .enumerate()
+        .filter_map(|(idx, row)| (!right_consumed[idx]).then_some(row))
+        .collect();
+
+    (left_unmatched, right_unmatched)
+}
+
+fn split_unmatched_rows_ordered_subset(
+    expected_rows: Rows,
+    actual_rows: Rows,
+    validate_metadata: bool,
+) -> (Rows, Rows) {
+    let mut actual_consumed = vec![false; actual_rows.len()];
+    let mut expected_unmatched = Vec::new();
+    let mut search_start = 0;
+
+    for expected_row in expected_rows {
+        let matched_idx = (search_start..actual_rows.len())
+            .find(|idx| rows_equal(&expected_row, &actual_rows[*idx], validate_metadata));
+
+        if let Some(idx) = matched_idx {
+            actual_consumed[idx] = true;
+            search_start = idx + 1;
+        } else {
+            expected_unmatched.push(expected_row);
+        }
+    }
+
+    let actual_unmatched = actual_rows
+        .into_iter()
+        .enumerate()
+        .filter_map(|(idx, row)| (!actual_consumed[idx]).then_some(row))
+        .collect();
+
+    (expected_unmatched, actual_unmatched)
+}
+
+fn best_non_exact_value_mismatch_pair(
+    expected_rows: &[Row],
+    actual_rows: &[Row],
+    validate_metadata: bool,
+) -> Option<(usize, usize, Vec<String>)> {
+    let mut best_pair: Option<(usize, usize, Vec<String>)> = None;
+
+    for (expected_idx, expected_row) in expected_rows.iter().enumerate() {
+        for (actual_idx, actual_row) in actual_rows.iter().enumerate() {
+            let differing_columns =
+                find_differing_columns(expected_row, actual_row, validate_metadata);
+            if differing_columns.is_empty()
+                || !has_meaningful_overlap(expected_row, actual_row, validate_metadata)
+            {
+                continue;
+            }
+
+            match &best_pair {
+                Some((_, _, current_diff)) if current_diff.len() <= differing_columns.len() => {}
+                _ => {
+                    best_pair = Some((expected_idx, actual_idx, differing_columns));
+                }
+            }
+        }
+    }
+
+    best_pair
+}
+
+fn has_meaningful_overlap(expected: &Row, actual: &Row, validate_metadata: bool) -> bool {
+    expected.iter().any(|(column, expected_value)| {
+        if column.starts_with('_') {
+            return false;
+        }
+
+        match actual.get(column) {
+            Some(actual_value) => {
+                values_equal_for_column(column, expected_value, actual_value, validate_metadata)
+            }
+            None => false,
+        }
+    })
+}
+
+/// Convert DataFrame to vector of row HashMaps
+fn dataframe_to_rows(df: &DataFrame) -> Result<Rows> {
+    let mut rows = Vec::new();
+    let height = df.height();
+    let columns = df.get_columns();
+
+    for row_idx in 0..height {
+        let mut row = HashMap::new();
+        for col in columns {
+            let col_name = col.name().to_string();
+            let value = column_value_at(col, row_idx);
+            row.insert(col_name, value);
+        }
+        rows.push(row);
+    }
+
+    Ok(rows)
+}
+
+/// Extract value from column at specific index
+fn column_value_at(col: &Column, idx: usize) -> serde_json::Value {
+    let series = col.as_materialized_series();
+
+    // Handle different data types
+    if let Ok(ca) = series.bool() {
+        ca.get(idx)
+            .map(serde_json::Value::Bool)
+            .unwrap_or(serde_json::Value::Null)
+    } else if let Ok(ca) = series.i64() {
+        ca.get(idx)
+            .map(serde_json::Value::from)
+            .unwrap_or(serde_json::Value::Null)
+    } else if let Ok(ca) = series.f64() {
+        ca.get(idx)
+            .map(serde_json::Value::from)
+            .unwrap_or(serde_json::Value::Null)
+    } else if let Ok(ca) = series.str() {
+        ca.get(idx)
+            .map(|s| serde_json::Value::String(s.to_string()))
+            .unwrap_or(serde_json::Value::Null)
+    } else {
+        // Fallback to string representation
+        serde_json::Value::String(format!("{:?}", series.get(idx).unwrap()))
+    }
+}
+
+/// Compare two row HashMaps for equality
+fn rows_equal(a: &Row, b: &Row, validate_metadata: bool) -> bool {
+    if a.len() != b.len() {
+        return false;
+    }
+
+    for (key, val_a) in a {
+        match b.get(key) {
+            Some(val_b) => {
+                if !values_equal_for_column(key, val_a, val_b, validate_metadata) {
+                    return false;
+                }
+            }
+            None => return false,
+        }
+    }
+
+    true
+}
+
+fn values_equal_for_column(
+    column: &str,
+    expected: &serde_json::Value,
+    actual: &serde_json::Value,
+    validate_metadata: bool,
+) -> bool {
+    if validate_metadata && is_volatile_metadata_column(column) {
+        return volatile_metadata_value_is_valid(column, actual);
+    }
+
+    values_equal(expected, actual)
+}
+
+fn is_volatile_metadata_column(column: &str) -> bool {
+    matches!(column, "_row_id" | "_created_at" | "_updated_at")
+}
+
+fn volatile_metadata_value_is_valid(column: &str, value: &serde_json::Value) -> bool {
+    match (column, value) {
+        ("_row_id", serde_json::Value::String(raw)) => Uuid::parse_str(raw)
+            .map(|uuid| uuid.get_version_num() == 7)
+            .unwrap_or(false),
+        ("_created_at" | "_updated_at", serde_json::Value::String(raw)) => {
+            DateTime::parse_from_rfc3339(raw).is_ok()
+        }
+        _ => false,
+    }
+}
+
+/// Compare two JSON values for equality (with float tolerance)
+fn values_equal(a: &serde_json::Value, b: &serde_json::Value) -> bool {
+    match (a, b) {
+        (serde_json::Value::Number(n1), serde_json::Value::Number(n2)) => {
+            if let (Some(f1), Some(f2)) = (n1.as_f64(), n2.as_f64()) {
+                (f1 - f2).abs() < 1e-10
+            } else {
+                n1 == n2
+            }
+        }
+        _ => a == b,
+    }
+}
+
+/// Find columns that differ between two rows
+fn find_differing_columns(expected: &Row, actual: &Row, validate_metadata: bool) -> Vec<String> {
+    let mut differing = Vec::new();
+
+    for (key, expected_val) in expected {
+        if let Some(actual_val) = actual.get(key) {
+            if !values_equal_for_column(key, expected_val, actual_val, validate_metadata) {
+                differing.push(key.clone());
+            }
+        } else {
+            differing.push(key.clone());
+        }
+    }
+
+    // Check for keys in actual that aren't in expected
+    for key in actual.keys() {
+        if !expected.contains_key(key) {
+            differing.push(key.clone());
+        }
+    }
+
+    differing.sort();
+    differing.dedup();
+    differing
+}
+
+/// Validate trace events against expected trace assertions
+/// T073: Create validate_trace_events() function
+pub fn validate_trace_events(
+    actual_trace: &[serde_json::Value],
+    assertions: &[TraceAssertion],
+) -> Result<Vec<TraceMismatch>> {
+    let mut mismatches = Vec::new();
+    let mut matched_events = vec![false; actual_trace.len()];
+
+    // For each assertion, find matching trace event
+    for assertion in assertions {
+        // T074: Implement trace event matching by operation_order and change_type
+        let matching_index =
+            find_matching_trace_event_index(actual_trace, assertion, &matched_events);
+
+        match matching_index {
+            Some(index) => {
+                matched_events[index] = true;
+                let event = &actual_trace[index];
+
+                // Event found - validate row_match and expected_diff
+                // T075: Add row_match validation
+                if !validate_row_match(event, &assertion.row_match) {
+                    mismatches.push(TraceMismatch {
+                        operation_order: assertion.operation_order,
+                        mismatch_type: TraceMismatchType::DiffMismatch,
+                        expected: assertion.clone(),
+                        actual: Some(event.clone()),
+                    });
+                    continue;
+                }
+
+                // T076: Add expected_diff validation for Updated change_type
+                if let Some(ref expected_diff) = assertion.expected_diff {
+                    if !validate_expected_diff(event, expected_diff) {
+                        mismatches.push(TraceMismatch {
+                            operation_order: assertion.operation_order,
+                            mismatch_type: TraceMismatchType::DiffMismatch,
+                            expected: assertion.clone(),
+                            actual: Some(event.clone()),
+                        });
+                    }
+                }
+            }
+            None => {
+                // T077: Create TraceMismatch instances for missing events
+                mismatches.push(TraceMismatch {
+                    operation_order: assertion.operation_order,
+                    mismatch_type: TraceMismatchType::MissingEvent,
+                    expected: assertion.clone(),
+                    actual: None,
+                });
+            }
+        }
+    }
+
+    for (index, event) in actual_trace.iter().enumerate() {
+        if !matched_events[index] {
+            mismatches.push(TraceMismatch {
+                operation_order: extract_operation_order(event),
+                mismatch_type: TraceMismatchType::ExtraEvent,
+                expected: placeholder_assertion_for_extra_event(event),
+                actual: Some(event.clone()),
+            });
+        }
+    }
+
+    Ok(mismatches)
+}
+
+/// Find trace event matching assertion by operation_order and change_type
+fn find_matching_trace_event_index(
+    trace: &[serde_json::Value],
+    assertion: &TraceAssertion,
+    matched_events: &[bool],
+) -> Option<usize> {
+    let mut fallback_match_index = None;
+
+    for (idx, event) in trace.iter().enumerate() {
+        if matched_events[idx] {
+            continue;
+        }
+
+        // Extract operation_order from event
+        let event_op_order = event
+            .get("operation_order")
+            .and_then(|v| v.as_i64())
+            .map(|v| v as i32);
+
+        // Extract change_type from event
+        let event_change_type = event.get("change_type").and_then(|v| v.as_str());
+
+        // Match assertion change_type to string
+        let assertion_change_type_str = match assertion.change_type {
+            dobo_core::model::TraceChangeType::Created => "created",
+            dobo_core::model::TraceChangeType::Updated => "updated",
+            dobo_core::model::TraceChangeType::Deleted => "deleted",
+        };
+
+        if event_op_order == Some(assertion.operation_order)
+            && event_change_type == Some(assertion_change_type_str)
+        {
+            if fallback_match_index.is_none() {
+                fallback_match_index = Some(idx);
+            }
+
+            if !validate_row_match(event, &assertion.row_match) {
+                continue;
+            }
+
+            if let Some(expected_diff) = &assertion.expected_diff {
+                if !validate_expected_diff(event, expected_diff) {
+                    continue;
+                }
+            }
+
+            return Some(idx);
+        }
+    }
+
+    fallback_match_index
+}
+
+fn extract_operation_order(event: &serde_json::Value) -> i32 {
+    event
+        .get("operation_order")
+        .and_then(|value| value.as_i64())
+        .map(|value| value as i32)
+        .unwrap_or(-1)
+}
+
+fn placeholder_assertion_for_extra_event(event: &serde_json::Value) -> TraceAssertion {
+    let change_type = match event
+        .get("change_type")
+        .and_then(|value| value.as_str())
+        .map(|value| value.to_ascii_lowercase())
+        .as_deref()
+    {
+        Some("updated") => TraceChangeType::Updated,
+        Some("deleted") => TraceChangeType::Deleted,
+        _ => TraceChangeType::Created,
+    };
+
+    TraceAssertion {
+        operation_order: extract_operation_order(event),
+        change_type,
+        row_match: HashMap::new(),
+        expected_diff: None,
+    }
+}
+
+/// Validate that event row matches the assertion row_match criteria
+fn validate_row_match(
+    event: &serde_json::Value,
+    row_match: &HashMap<String, serde_json::Value>,
+) -> bool {
+    // Get the row data from event (typically in "after" or "before" field)
+    let row_data = event
+        .get("after")
+        .or_else(|| event.get("before"))
+        .or_else(|| event.get("row"));
+
+    if let Some(row) = row_data {
+        // Check all row_match criteria
+        for (key, expected_value) in row_match {
+            let actual_value = row.get(key);
+            match actual_value {
+                Some(val) if values_equal(val, expected_value) => continue,
+                _ => return false,
+            }
+        }
+        true
+    } else {
+        false
+    }
+}
+
+/// Validate expected_diff for Updated events
+fn validate_expected_diff(
+    event: &serde_json::Value,
+    expected_diff: &HashMap<String, serde_json::Value>,
+) -> bool {
+    // Get the diff from event
+    let diff = event.get("diff");
+
+    if let Some(diff_obj) = diff {
+        // Check all expected diff entries
+        for (key, expected_value) in expected_diff {
+            let actual_value = diff_obj.get(key);
+            match actual_value {
+                Some(val) if values_equal(val, expected_value) => continue,
+                _ => return false,
+            }
+        }
+        true
+    } else {
+        false
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn exact_unordered_reports_value_mismatch_with_differing_columns() {
+        let actual = df! {
+            "id" => &[1i64],
+            "value" => &[20i64],
+        }
+        .unwrap();
+        let expected = df! {
+            "id" => &[1i64],
+            "value" => &[10i64],
+        }
+        .unwrap();
+
+        let mismatches = compare_output(&actual, &expected, MatchMode::Exact, true, false).unwrap();
+        assert_eq!(mismatches.len(), 1);
+        assert_eq!(mismatches[0].mismatch_type, MismatchType::ValueMismatch);
+        assert!(mismatches[0]
+            .differing_columns
+            .contains(&"value".to_string()));
+    }
+
+    #[test]
+    fn exact_unordered_detects_duplicate_row_cardinality_mismatch() {
+        let actual = df! {
+            "id" => &[1i64],
+        }
+        .unwrap();
+        let expected = df! {
+            "id" => &[1i64, 1i64],
+        }
+        .unwrap();
+
+        let mismatches = compare_output(&actual, &expected, MatchMode::Exact, true, false).unwrap();
+        assert_eq!(mismatches.len(), 1);
+        assert_eq!(mismatches[0].mismatch_type, MismatchType::MissingRow);
+    }
+
+    #[test]
+    fn exact_unordered_reports_missing_and_extra_when_rows_do_not_overlap() {
+        let actual = df! {
+            "id" => &[2i64],
+            "value" => &[20i64],
+        }
+        .unwrap();
+        let expected = df! {
+            "id" => &[1i64],
+            "value" => &[10i64],
+        }
+        .unwrap();
+
+        let mismatches = compare_output(&actual, &expected, MatchMode::Exact, true, false).unwrap();
+        assert_eq!(mismatches.len(), 2);
+        assert!(mismatches
+            .iter()
+            .any(|mismatch| mismatch.mismatch_type == MismatchType::MissingRow));
+        assert!(mismatches
+            .iter()
+            .any(|mismatch| mismatch.mismatch_type == MismatchType::ExtraRow));
+    }
+
+    #[test]
+    fn compare_output_returns_error_on_schema_mismatch() {
+        let actual = df! {
+            "id" => &[1i64],
+            "value" => &[20i64],
+        }
+        .unwrap();
+        let expected = df! {
+            "id" => &[1i64],
+            "amount" => &[20i64],
+        }
+        .unwrap();
+
+        let error = compare_output(&actual, &expected, MatchMode::Exact, true, false)
+            .unwrap_err()
+            .to_string();
+        assert!(error.contains("Schema mismatch"));
+    }
+
+    #[test]
+    fn compare_output_accepts_reordered_columns_with_same_schema() {
+        let actual = df! {
+            "id" => &[1i64],
+            "value" => &[20i64],
+        }
+        .unwrap();
+        let expected = df! {
+            "value" => &[20i64],
+            "id" => &[1i64],
+        }
+        .unwrap();
+
+        let mismatches = compare_output(&actual, &expected, MatchMode::Exact, true, true).unwrap();
+        assert!(mismatches.is_empty());
+    }
+
+    #[test]
+    fn subset_mode_honors_order_sensitive_flag() {
+        let actual = df! {
+            "id" => &[2i64, 1i64],
+            "value" => &[20i64, 10i64],
+        }
+        .unwrap();
+        let expected = df! {
+            "id" => &[1i64, 2i64],
+            "value" => &[10i64, 20i64],
+        }
+        .unwrap();
+
+        let order_sensitive =
+            compare_output(&actual, &expected, MatchMode::Subset, true, true).unwrap();
+        let order_insensitive =
+            compare_output(&actual, &expected, MatchMode::Subset, true, false).unwrap();
+
+        assert_eq!(order_insensitive.len(), 0);
+        assert_eq!(order_sensitive.len(), 1);
+        assert_eq!(order_sensitive[0].mismatch_type, MismatchType::MissingRow);
+    }
+
+    #[test]
+    fn subset_mode_reports_value_mismatch_with_differing_columns() {
+        let actual = df! {
+            "id" => &[1i64],
+            "value" => &[20i64],
+        }
+        .unwrap();
+        let expected = df! {
+            "id" => &[1i64],
+            "value" => &[10i64],
+        }
+        .unwrap();
+
+        let mismatches =
+            compare_output(&actual, &expected, MatchMode::Subset, true, false).unwrap();
+        assert_eq!(mismatches.len(), 1);
+        assert_eq!(mismatches[0].mismatch_type, MismatchType::ValueMismatch);
+        assert_eq!(mismatches[0].differing_columns, vec!["value".to_string()]);
+    }
+
+    #[test]
+    fn subset_mode_reports_missing_row_when_rows_do_not_overlap() {
+        let actual = df! {
+            "id" => &[2i64],
+        }
+        .unwrap();
+        let expected = df! {
+            "id" => &[1i64],
+        }
+        .unwrap();
+
+        let mismatches =
+            compare_output(&actual, &expected, MatchMode::Subset, true, false).unwrap();
+        assert_eq!(mismatches.len(), 1);
+        assert_eq!(mismatches[0].mismatch_type, MismatchType::MissingRow);
+        assert!(mismatches[0].actual.is_none());
+    }
+
+    #[test]
+    fn metadata_validation_uses_semantics_for_volatile_columns() {
+        let actual = df! {
+            "id" => &[1i64],
+            "_row_id" => &["018f6f30-7a35-7000-8000-000000000001"],
+            "_created_at" => &["2026-01-01T00:00:00Z"],
+            "_updated_at" => &["2026-01-01T00:00:00Z"],
+            "_source_table" => &["orders"],
+            "_deleted" => &[false],
+        }
+        .unwrap();
+        let expected = df! {
+            "id" => &[1i64],
+            "_row_id" => &["any-value-is-accepted-for-expected"],
+            "_created_at" => &["placeholder"],
+            "_updated_at" => &["placeholder"],
+            "_source_table" => &["orders"],
+            "_deleted" => &[false],
+        }
+        .unwrap();
+
+        let mismatches = compare_output(&actual, &expected, MatchMode::Exact, true, true).unwrap();
+        assert!(mismatches.is_empty(), "{:?}", mismatches);
+    }
+
+    #[test]
+    fn metadata_validation_rejects_invalid_actual_volatile_values() {
+        let actual = df! {
+            "id" => &[1i64],
+            "_row_id" => &["not-a-uuid"],
+            "_created_at" => &["not-a-date"],
+            "_updated_at" => &["not-a-date"],
+        }
+        .unwrap();
+        let expected = df! {
+            "id" => &[1i64],
+            "_row_id" => &["placeholder"],
+            "_created_at" => &["placeholder"],
+            "_updated_at" => &["placeholder"],
+        }
+        .unwrap();
+
+        let mismatches = compare_output(&actual, &expected, MatchMode::Exact, true, true).unwrap();
+        assert_eq!(mismatches.len(), 1);
+        assert_eq!(mismatches[0].mismatch_type, MismatchType::ValueMismatch);
+        assert!(mismatches[0]
+            .differing_columns
+            .contains(&"_row_id".to_string()));
+    }
+
+    #[test]
+    fn trace_validation_detects_extra_events() {
+        let actual_trace = vec![json!({
+            "operation_order": 4,
+            "change_type": "created",
+            "after": {"id": "A1"}
+        })];
+
+        let mismatches = validate_trace_events(&actual_trace, &[]).unwrap();
+        assert_eq!(mismatches.len(), 1);
+        assert_eq!(mismatches[0].mismatch_type, TraceMismatchType::ExtraEvent);
+        assert_eq!(mismatches[0].operation_order, 4);
+    }
+
+    #[test]
+    fn trace_validation_detects_missing_event_by_operation_and_change_type() {
+        let assertions = vec![TraceAssertion {
+            operation_order: 2,
+            change_type: TraceChangeType::Deleted,
+            row_match: HashMap::from([("id".to_string(), json!(1))]),
+            expected_diff: None,
+        }];
+
+        let mismatches = validate_trace_events(&[], &assertions).unwrap();
+        assert_eq!(mismatches.len(), 1);
+        assert_eq!(mismatches[0].mismatch_type, TraceMismatchType::MissingEvent);
+        assert_eq!(mismatches[0].operation_order, 2);
+    }
+
+    #[test]
+    fn trace_validation_reports_row_match_mismatch_as_diff_mismatch() {
+        let actual_trace = vec![json!({
+            "operation_order": 1,
+            "change_type": "created",
+            "after": {"id": 999, "value": 10}
+        })];
+        let assertions = vec![TraceAssertion {
+            operation_order: 1,
+            change_type: TraceChangeType::Created,
+            row_match: HashMap::from([("id".to_string(), json!(1))]),
+            expected_diff: None,
+        }];
+
+        let mismatches = validate_trace_events(&actual_trace, &assertions).unwrap();
+        assert_eq!(mismatches.len(), 1);
+        assert_eq!(mismatches[0].mismatch_type, TraceMismatchType::DiffMismatch);
+    }
+
+    #[test]
+    fn trace_validation_finds_full_match_when_events_share_operation_and_change_type() {
+        let actual_trace = vec![
+            json!({
+                "operation_order": 1,
+                "change_type": "created",
+                "after": {"id": 2, "value": 20}
+            }),
+            json!({
+                "operation_order": 1,
+                "change_type": "created",
+                "after": {"id": 1, "value": 10}
+            }),
+        ];
+        let assertions = vec![
+            TraceAssertion {
+                operation_order: 1,
+                change_type: TraceChangeType::Created,
+                row_match: HashMap::from([("id".to_string(), json!(1))]),
+                expected_diff: None,
+            },
+            TraceAssertion {
+                operation_order: 1,
+                change_type: TraceChangeType::Created,
+                row_match: HashMap::from([("id".to_string(), json!(2))]),
+                expected_diff: None,
+            },
+        ];
+
+        let mismatches = validate_trace_events(&actual_trace, &assertions).unwrap();
+        assert!(mismatches.is_empty(), "{:?}", mismatches);
+    }
+
+    #[test]
+    fn trace_validation_uses_expected_diff_to_pick_matching_updated_event() {
+        let actual_trace = vec![
+            json!({
+                "operation_order": 3,
+                "change_type": "updated",
+                "after": {"id": 1, "value": 10},
+                "diff": {"value": 10}
+            }),
+            json!({
+                "operation_order": 3,
+                "change_type": "updated",
+                "after": {"id": 1, "value": 20},
+                "diff": {"value": 20}
+            }),
+        ];
+        let assertions = vec![
+            TraceAssertion {
+                operation_order: 3,
+                change_type: TraceChangeType::Updated,
+                row_match: HashMap::from([("id".to_string(), json!(1))]),
+                expected_diff: Some(HashMap::from([("value".to_string(), json!(20))])),
+            },
+            TraceAssertion {
+                operation_order: 3,
+                change_type: TraceChangeType::Updated,
+                row_match: HashMap::from([("id".to_string(), json!(1))]),
+                expected_diff: Some(HashMap::from([("value".to_string(), json!(10))])),
+            },
+        ];
+
+        let mismatches = validate_trace_events(&actual_trace, &assertions).unwrap();
+        assert!(mismatches.is_empty(), "{:?}", mismatches);
+    }
+
+    #[test]
+    fn trace_validation_expected_diff_for_updated_event_passes_and_fails() {
+        let passing_trace = vec![json!({
+            "operation_order": 3,
+            "change_type": "updated",
+            "after": {"id": 1, "value": 20},
+            "diff": {"value": 20}
+        })];
+        let assertion = TraceAssertion {
+            operation_order: 3,
+            change_type: TraceChangeType::Updated,
+            row_match: HashMap::from([("id".to_string(), json!(1))]),
+            expected_diff: Some(HashMap::from([("value".to_string(), json!(20))])),
+        };
+
+        let pass_mismatches =
+            validate_trace_events(&passing_trace, std::slice::from_ref(&assertion)).unwrap();
+        assert!(pass_mismatches.is_empty());
+
+        let failing_trace = vec![json!({
+            "operation_order": 3,
+            "change_type": "updated",
+            "after": {"id": 1, "value": 99},
+            "diff": {"value": 99}
+        })];
+        let fail_mismatches = validate_trace_events(&failing_trace, &[assertion]).unwrap();
+        assert_eq!(fail_mismatches.len(), 1);
+        assert_eq!(
+            fail_mismatches[0].mismatch_type,
+            TraceMismatchType::DiffMismatch
+        );
+    }
+}
