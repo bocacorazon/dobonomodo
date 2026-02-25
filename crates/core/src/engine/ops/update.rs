@@ -321,7 +321,10 @@ fn compile_selector(selector_expr: &str, context: &CompilationContext) -> Result
         .map_err(UpdateError::SelectorCompile)
 }
 
-fn compile_assignments(assignments: &[Assignment], context: &CompilationContext) -> Result<Vec<Expr>> {
+fn compile_assignments(
+    assignments: &[Assignment],
+    context: &CompilationContext,
+) -> Result<Vec<Expr>> {
     assignments
         .iter()
         .map(|assignment| {
@@ -424,7 +427,10 @@ fn normalize_update_expression(source: &str) -> String {
             let is_function = lookahead < chars.len() && chars[lookahead] == '(';
 
             if token.contains('.')
-                || matches!(upper.as_str(), "AND" | "OR" | "NOT" | "TRUE" | "FALSE" | "NULL")
+                || matches!(
+                    upper.as_str(),
+                    "AND" | "OR" | "NOT" | "TRUE" | "FALSE" | "NULL"
+                )
                 || is_function
             {
                 result.push_str(&token);
