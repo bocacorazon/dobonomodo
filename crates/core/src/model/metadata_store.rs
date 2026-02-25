@@ -31,5 +31,11 @@ pub trait MetadataStore {
 
     fn get_project(&self, id: &Uuid) -> Result<Project, MetadataStoreError>;
     fn get_resolver(&self, id: &str) -> Result<Resolver, MetadataStoreError>;
+    fn get_default_resolver(&self) -> Result<Resolver, MetadataStoreError> {
+        Err(MetadataStoreError::OperationFailed {
+            message: "default resolver lookup is not implemented by this metadata store"
+                .to_string(),
+        })
+    }
     fn update_run_status(&self, id: &Uuid, status: RunStatus) -> Result<(), MetadataStoreError>;
 }

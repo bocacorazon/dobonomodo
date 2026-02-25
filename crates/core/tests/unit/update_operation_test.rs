@@ -814,7 +814,10 @@ fn test_update_assignment_order_is_sequential() {
         .collect()
         .expect("collect");
 
-    assert_eq!(values_as_strings(&result, "status"), vec!["processed", "active", "inactive"]);
+    assert_eq!(
+        values_as_strings(&result, "status"),
+        vec!["processed", "active", "inactive"]
+    );
     assert_eq!(values_as_i64(&result, "count"), vec![100, 2, 3]);
 }
 
