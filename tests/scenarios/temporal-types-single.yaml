@@ -1,0 +1,65 @@
+name: "Temporal Types Single"
+description: "Ensures date and timestamp typed columns parse and execute"
+
+periods:
+  - identifier: "2026-01"
+    level: "month"
+    start_date: "2026-01-01"
+    end_date: "2026-01-31"
+
+input:
+  dataset:
+    id: "770e8400-e29b-41d4-a716-446655440070"
+    name: "orders_dataset"
+    owner: "test"
+    version: 1
+    status: active
+    main_table:
+      name: "orders"
+      temporal_mode: period
+      columns:
+        - name: "id"
+          type: integer
+          nullable: false
+        - name: "order_date"
+          type: date
+          nullable: false
+        - name: "captured_at"
+          type: timestamp
+          nullable: false
+
+  data:
+    orders:
+      rows:
+        - id: 1
+          order_date: "2026-01-15"
+          captured_at: "2026-01-15T10:30:00"
+          _period: "2026-01"
+
+project:
+  id: "880e8400-e29b-41d4-a716-446655440080"
+  name: "passthrough"
+  owner: "test"
+  version: 1
+  status: active
+  visibility: private
+  input_dataset_id: "770e8400-e29b-41d4-a716-446655440070"
+  input_dataset_version: 1
+  materialization: eager
+  operations:
+    - order: 1
+      type: output
+      parameters: {}
+
+expected_output:
+  data:
+    rows:
+      - id: 1
+        order_date: "2026-01-15"
+        captured_at: "2026-01-15T10:30:00"
+
+config:
+  match_mode: exact
+  validate_metadata: false
+  validate_traceability: false
+  snapshot_on_failure: false

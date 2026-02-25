@@ -1,8 +1,8 @@
-# Specification Quality Checklist: Speckit Specify Workflow Automation
+# Specification Quality Checklist: Specification Workflow Initialization
 
-**Purpose**: Validate specification completeness and quality before proceeding to planning
-**Created**: 2026-02-22
-**Feature**: [/workspace/specs/001-speckit-specify-workflow/spec.md](/workspace/specs/001-speckit-specify-workflow/spec.md)
+**Purpose**: Validate specification completeness and quality before proceeding to planning  
+**Created**: 2026-02-23  
+**Feature**: [spec.md](../spec.md)
 
 ## Content Quality
 
@@ -31,5 +31,5 @@
 
 ## Notes
 
-- Validation passed on first iteration; no unresolved quality issues were found.
-- This feature is ready for `/speckit.plan`.
+- Validation iteration 1: all checks passed, no unresolved clarifications.
+- Ready for `/speckit.clarify` or `/speckit.plan`.

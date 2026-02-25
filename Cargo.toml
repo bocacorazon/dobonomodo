@@ -15,9 +15,13 @@ edition = "2021"
 [workspace.dependencies]
 anyhow = "1"
 chrono = { version = "0.4", features = ["serde", "clock"] }
-polars = { version = "0.46", default-features = false, features = ["lazy"] }
+lazy_static = "1.4"
+pest = "2.7"
+pest_derive = "2.7"
+polars = { version = "0.46", default-features = false, features = ["lazy", "strings", "temporal", "dtype-date", "dtype-datetime", "dtype-duration", "concat_str", "round_series", "regex", "csv", "parquet"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 serde_yaml = "0.9"
 thiserror = "2"
+tracing = "0.1"
 uuid = { version = "1", features = ["serde", "v7"] }

@@ -1,43 +1,44 @@
-# Rust build artifacts
+# Rust build outputs
 target/
+**/target/
 debug/
 release/
+.cargo-target/
+
+*.rs.bk
 *.rlib
 *.prof*
 
-# IDE and editor files
-.idea/
-.vscode/
+# VCS and Docker metadata
+.git/
+.gitignore
+Dockerfile*
+.dockerignore
+
+# Common transient files
+*.log
+*.log*
+.env*
+coverage/
+dist/
+build/
 .DS_Store
 Thumbs.db
+*.tmp
 *.swp
 *.swo
 *~
+.vscode/
+.idea/
 
-# Logs and temporary files
-*.log
-*.log*
-*.tmp
-.env*
-
-# Git directory
-.git/
-
-# Documentation and specs (not needed in image)
+# Documentation/specs/tests not needed in image
 docs/
 specs/
 *.md
-
-# Test files
 tests/
 **/*_test.rs
 
-# CI/CD
+# CI/dev tooling
 .github/
-
-# Development tools
 .devcontainer/
-Dockerfile*
-.dockerignore
 node_modules/
-coverage/

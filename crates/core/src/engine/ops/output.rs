@@ -100,11 +100,15 @@ struct MetadataStoreRegistrationAdapter<'a> {
 
 impl<'a> DatasetRegistrationStore for MetadataStoreRegistrationAdapter<'a> {
     fn get_dataset_by_name(&self, name: &str) -> Result<Option<Dataset>> {
-        self.metadata_store.get_dataset_by_name(name)
+        self.metadata_store
+            .get_dataset_by_name(name)
+            .map_err(anyhow::Error::from)
     }
 
     fn register_dataset(&self, dataset: Dataset) -> Result<Uuid> {
-        self.metadata_store.register_dataset(dataset)
+        self.metadata_store
+            .register_dataset(dataset)
+            .map_err(anyhow::Error::from)
     }
 }
 
