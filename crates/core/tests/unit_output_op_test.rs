@@ -2,9 +2,9 @@ use anyhow::{anyhow, Result};
 use dobo_core::engine::io_traits::OutputWriter;
 use dobo_core::engine::ops::output::{
     execute_output, execute_output_with_registration_store,
-    execute_output_with_registration_store_and_warning_logger,
-    execute_output_with_registry, execute_output_with_registry_and_warning_logger, extract_schema,
-    ColumnType, OutputError, OutputOperation, OutputWarning, OutputWarningLogger, TemporalMode,
+    execute_output_with_registration_store_and_warning_logger, execute_output_with_registry,
+    execute_output_with_registry_and_warning_logger, extract_schema, ColumnType, OutputError,
+    OutputOperation, OutputWarning, OutputWarningLogger, TemporalMode,
 };
 use dobo_core::model::{Dataset, OutputDestination, Project, Resolver, RunStatus};
 use dobo_core::{DatasetRegistrationStore, MetadataStore};
