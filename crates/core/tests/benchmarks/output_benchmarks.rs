@@ -1,4 +1,4 @@
-use dobo_core::engine::io_traits::OutputWriter;
+use dobo_core::engine::io_traits::{OutputWriter, OutputWriterError};
 use dobo_core::engine::ops::output::{execute_output, OutputOperation};
 use dobo_core::model::OutputDestination;
 use polars::prelude::*;
@@ -7,7 +7,11 @@ use std::time::Instant;
 struct NoopWriter;
 
 impl OutputWriter for NoopWriter {
-    fn write(&self, _frame: &DataFrame, _destination: &OutputDestination) -> anyhow::Result<()> {
+    fn write(
+        &self,
+        _frame: &DataFrame,
+        _destination: &OutputDestination,
+    ) -> std::result::Result<(), OutputWriterError> {
         Ok(())
     }
 }

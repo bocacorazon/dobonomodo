@@ -2,7 +2,7 @@
 // Test Scenario TS-07 from sample-datasets.md
 
 use anyhow::Result;
-use dobo_core::engine::io_traits::OutputWriter;
+use dobo_core::engine::io_traits::{OutputWriter, OutputWriterError};
 use dobo_core::engine::ops::{execute_output, OutputOperation};
 use dobo_core::model::OutputDestination;
 use polars::prelude::*;
@@ -26,7 +26,11 @@ impl MockOutputWriter {
 }
 
 impl OutputWriter for MockOutputWriter {
-    fn write(&self, frame: &DataFrame, _destination: &OutputDestination) -> Result<()> {
+    fn write(
+        &self,
+        frame: &DataFrame,
+        _destination: &OutputDestination,
+    ) -> std::result::Result<(), OutputWriterError> {
         self.written_data.lock().unwrap().push(frame.clone());
         Ok(())
     }

@@ -244,7 +244,11 @@ fn validate_destination(destination: &ModelOutputDestination) -> Result<(), Outp
 fn destination_table_name(destination: &ModelOutputDestination) -> String {
     match destination {
         ModelOutputDestination::Table { table, .. } => table.clone(),
-        ModelOutputDestination::Location { path } => path.clone(),
+        ModelOutputDestination::Location { path } => std::path::Path::new(path)
+            .file_name()
+            .and_then(|name| name.to_str())
+            .unwrap_or(path)
+            .to_string(),
     }
 }
 
@@ -502,7 +506,7 @@ pub fn execute_output_with_registration_store_and_warning_logger(
     let write_start = Instant::now();
     output_writer
         .write(&output_df, &operation.destination)
-        .map_err(OutputError::WriteFailed)?;
+        .map_err(|e| OutputError::WriteFailed(e.into()))?;
     let write_duration_ms = write_start.elapsed().as_millis() as u64;
 
     let columns_written: Vec<String> = output_df

@@ -131,9 +131,12 @@ pub struct OutputOperation {
     /// Target destination for output data
     pub destination: OutputDestination,
     
-    /// Optional row filter (boolean expression)
+    /// Optional row filter (boolean expression).
+    ///
+    /// Uses a Polars `Expr` directly (e.g., `col("amount").gt(lit(1000))`).
+    /// The expression must evaluate to a boolean series.
     #[serde(default)]
-    pub selector: Option<Expression>,
+    pub selector: Option<Expr>,
     
     /// Optional column projection (subset of columns to output)
     #[serde(default)]
