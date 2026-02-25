@@ -452,6 +452,28 @@ fn zero_row_selector_returns_success_with_zero_appended() {
 }
 
 #[test]
+fn missing_selector_column_returns_column_not_found() {
+    let working = working_for_errors();
+    let source = df!(
+        "account_code" => &["4000", "5000"],
+        "amount" => &[10i64, 20]
+    )
+    .expect("source frame");
+    let mut op = append_operation(None);
+    op.source_selector = Some("nonexistent_col = 'x'".into());
+
+    let error = execute_append(&working, &source, &op, &AppendExecutionContext::default())
+        .expect_err("should fail");
+    match error {
+        AppendError::ColumnNotFound { column, context } => {
+            assert_eq!(column, "nonexistent_col");
+            assert_eq!(context, "source_selector");
+        }
+        other => panic!("expected ColumnNotFound, got {other:?}"),
+    }
+}
+
+#[test]
 fn soft_deleted_source_rows_are_excluded_by_default() {
     let working = working_for_errors();
     let source = df!(

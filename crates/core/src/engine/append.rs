@@ -4,7 +4,7 @@ use polars::prelude::{col, len, lit, DataFrame, IntoLazy, LazyFrame, NamedFrom, 
 use uuid::Uuid;
 
 use crate::dsl::aggregation::parse_aggregation;
-use crate::dsl::expression::parse_source_selector;
+use crate::dsl::expression::{extract_selector_columns, parse_source_selector};
 use crate::engine::aggregation::apply_aggregation_lazy;
 use crate::engine::error::AppendError;
 use crate::engine::io_traits::DataLoader;
@@ -184,6 +184,14 @@ pub fn apply_source_selector_lazy(
             error,
         }
     })?;
+
+    let columns = extract_selector_columns(&selector.source).map_err(|error| {
+        AppendError::ExpressionParseError {
+            expression: selector.source.clone(),
+            error,
+        }
+    })?;
+    validate_lazy_columns_exist(&frame, &columns, "source_selector")?;
 
     Ok(frame.filter(filter_expr))
 }
