@@ -82,8 +82,15 @@ pub struct ResolvedLocation {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub struct OutputDestination {
-    pub destination_type: String,
-    #[serde(default)]
-    pub target: Option<String>,
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum OutputDestination {
+    Table {
+        datasource_id: String,
+        table: String,
+        #[serde(default)]
+        schema: Option<String>,
+    },
+    Location {
+        path: String,
+    },
 }

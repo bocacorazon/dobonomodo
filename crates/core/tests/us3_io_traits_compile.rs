@@ -82,33 +82,6 @@ impl MetadataStore for NoopMetadataStore {
         Err(MetadataStoreError::OperationFailed {
             message: "not implemented".to_string(),
         })
-fn sample_project(dataset_id: Uuid) -> Project {
-    Project {
-        id: Uuid::now_v7(),
-        name: "project".to_string(),
-        description: None,
-        owner: "owner".to_string(),
-        version: 1,
-        status: ProjectStatus::Draft,
-        visibility: Visibility::Private,
-        input_dataset_id: dataset_id,
-        input_dataset_version: 1,
-        materialization: Materialization::Runtime,
-        operations: vec![OperationInstance {
-            order: 1,
-            kind: dobo_core::model::OperationKind::Output,
-            alias: None,
-            parameters: serde_json::json!({
-                "destination": {
-                    "destination_type": "memory"
-                }
-            }),
-        }],
-        selectors: BTreeMap::new(),
-        resolver_overrides: BTreeMap::new(),
-        conflict_report: None,
-        created_at: None,
-        updated_at: None,
     }
 }
 
