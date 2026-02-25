@@ -1,5 +1,5 @@
 use anyhow::{anyhow, Result};
-use dobo_core::engine::io_traits::OutputWriter;
+use dobo_core::engine::io_traits::{OutputWriter, OutputWriterError};
 use dobo_core::engine::ops::output::{
     execute_output, execute_output_with_registration_store,
     execute_output_with_registration_store_and_warning_logger, execute_output_with_registry,
@@ -7,7 +7,7 @@ use dobo_core::engine::ops::output::{
     OutputOperation, OutputWarning, OutputWarningLogger, TemporalMode,
 };
 use dobo_core::model::{Dataset, OutputDestination, Project, Resolver, RunStatus};
-use dobo_core::{DatasetRegistrationStore, MetadataStore};
+use dobo_core::{DatasetRegistrationStore, MetadataStore, MetadataStoreError};
 use polars::prelude::*;
 use std::fs;
 use std::path::PathBuf;
@@ -57,9 +57,15 @@ impl MockOutputWriter {
 }
 
 impl OutputWriter for MockOutputWriter {
-    fn write(&self, _frame: &DataFrame, _destination: &OutputDestination) -> Result<()> {
+    fn write(
+        &self,
+        _frame: &DataFrame,
+        _destination: &OutputDestination,
+    ) -> std::result::Result<(), OutputWriterError> {
         if let Some(message) = self.fail_with.as_ref() {
-            return Err(anyhow!(message.clone()));
+            return Err(OutputWriterError::WriteFailed {
+                message: message.clone(),
+            });
         }
         let mut count = self.write_count.lock().unwrap();
         *count += 1;
@@ -80,27 +86,59 @@ impl MockMetadataStore {
 }
 
 impl MetadataStore for MockMetadataStore {
-    fn get_dataset(&self, _id: &Uuid, _version: Option<i32>) -> Result<Dataset> {
-        Err(anyhow!("not used in tests"))
+    fn get_dataset(
+        &self,
+        _id: &Uuid,
+        _version: Option<i32>,
+    ) -> std::result::Result<Dataset, MetadataStoreError> {
+        Err(MetadataStoreError::OperationFailed {
+            message: "not used in tests".to_string(),
+        })
     }
 
-    fn get_dataset_by_name(&self, name: &str) -> Result<Option<Dataset>> {
+    fn get_dataset_by_name(
+        &self,
+        name: &str,
+    ) -> std::result::Result<Option<Dataset>, MetadataStoreError> {
         DatasetRegistrationStore::get_dataset_by_name(self, name)
+            .map_err(|e| MetadataStoreError::OperationFailed {
+                message: e.to_string(),
+            })
     }
 
-    fn register_dataset(&self, dataset: Dataset) -> Result<Uuid> {
+    fn register_dataset(
+        &self,
+        dataset: Dataset,
+    ) -> std::result::Result<Uuid, MetadataStoreError> {
         DatasetRegistrationStore::register_dataset(self, dataset)
+            .map_err(|e| MetadataStoreError::OperationFailed {
+                message: e.to_string(),
+            })
     }
 
-    fn get_project(&self, _id: &Uuid) -> Result<Project> {
-        Err(anyhow!("not used in tests"))
+    fn get_project(
+        &self,
+        _id: &Uuid,
+    ) -> std::result::Result<Project, MetadataStoreError> {
+        Err(MetadataStoreError::OperationFailed {
+            message: "not used in tests".to_string(),
+        })
     }
 
-    fn get_resolver(&self, _id: &str) -> Result<Resolver> {
-        Err(anyhow!("not used in tests"))
+    fn get_resolver(
+        &self,
+        _id: &str,
+    ) -> std::result::Result<Resolver, MetadataStoreError> {
+        Err(MetadataStoreError::OperationFailed {
+            message: "not used in tests".to_string(),
+        })
     }
 
-    fn update_run_status(&self, _id: &Uuid, _status: RunStatus) -> Result<()> {
+    fn update_run_status(
+        &self,
+        _id: &Uuid,
+        _status: RunStatus,
+    ) -> std::result::Result<(), MetadataStoreError> {
         Ok(())
     }
 }
@@ -127,27 +165,57 @@ impl DatasetRegistrationStore for MockMetadataStore {
 struct NonRegisteringMetadataStore;
 
 impl MetadataStore for NonRegisteringMetadataStore {
-    fn get_dataset(&self, _id: &Uuid, _version: Option<i32>) -> Result<Dataset> {
-        Err(anyhow!("not used in tests"))
+    fn get_dataset(
+        &self,
+        _id: &Uuid,
+        _version: Option<i32>,
+    ) -> std::result::Result<Dataset, MetadataStoreError> {
+        Err(MetadataStoreError::OperationFailed {
+            message: "not used in tests".to_string(),
+        })
     }
 
-    fn get_dataset_by_name(&self, _name: &str) -> Result<Option<Dataset>> {
-        Err(anyhow!("registration lookup unavailable"))
+    fn get_dataset_by_name(
+        &self,
+        _name: &str,
+    ) -> std::result::Result<Option<Dataset>, MetadataStoreError> {
+        Err(MetadataStoreError::OperationFailed {
+            message: "registration lookup unavailable".to_string(),
+        })
     }
 
-    fn register_dataset(&self, _dataset: Dataset) -> Result<Uuid> {
-        Err(anyhow!("registration backend unavailable"))
+    fn register_dataset(
+        &self,
+        _dataset: Dataset,
+    ) -> std::result::Result<Uuid, MetadataStoreError> {
+        Err(MetadataStoreError::OperationFailed {
+            message: "registration backend unavailable".to_string(),
+        })
     }
 
-    fn get_project(&self, _id: &Uuid) -> Result<Project> {
-        Err(anyhow!("not used in tests"))
+    fn get_project(
+        &self,
+        _id: &Uuid,
+    ) -> std::result::Result<Project, MetadataStoreError> {
+        Err(MetadataStoreError::OperationFailed {
+            message: "not used in tests".to_string(),
+        })
     }
 
-    fn get_resolver(&self, _id: &str) -> Result<Resolver> {
-        Err(anyhow!("not used in tests"))
+    fn get_resolver(
+        &self,
+        _id: &str,
+    ) -> std::result::Result<Resolver, MetadataStoreError> {
+        Err(MetadataStoreError::OperationFailed {
+            message: "not used in tests".to_string(),
+        })
     }
 
-    fn update_run_status(&self, _id: &Uuid, _status: RunStatus) -> Result<()> {
+    fn update_run_status(
+        &self,
+        _id: &Uuid,
+        _status: RunStatus,
+    ) -> std::result::Result<(), MetadataStoreError> {
         Ok(())
     }
 }

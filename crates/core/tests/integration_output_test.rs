@@ -1,12 +1,12 @@
 use anyhow::Result;
-use dobo_core::engine::io_traits::OutputWriter;
+use dobo_core::engine::io_traits::{OutputWriter, OutputWriterError};
 use dobo_core::engine::ops::output::{
     execute_output, execute_output_with_registration_store,
     execute_output_with_registration_store_and_warning_logger, OutputError, OutputOperation,
     OutputWarning, OutputWarningLogger,
 };
 use dobo_core::model::{Dataset, OutputDestination, Project, Resolver, RunStatus};
-use dobo_core::{DatasetRegistrationStore, MetadataStore};
+use dobo_core::{DatasetRegistrationStore, MetadataStore, MetadataStoreError};
 use polars::prelude::*;
 use std::sync::Mutex;
 use uuid::Uuid;
@@ -45,7 +45,11 @@ impl CapturingWriter {
 }
 
 impl OutputWriter for CapturingWriter {
-    fn write(&self, frame: &DataFrame, _destination: &OutputDestination) -> Result<()> {
+    fn write(
+        &self,
+        frame: &DataFrame,
+        _destination: &OutputDestination,
+    ) -> std::result::Result<(), OutputWriterError> {
         self.written_data.lock().unwrap().push(frame.clone());
         Ok(())
     }
@@ -73,27 +77,59 @@ impl IntegrationMetadataStore {
 }
 
 impl MetadataStore for IntegrationMetadataStore {
-    fn get_dataset(&self, _id: &Uuid, _version: Option<i32>) -> anyhow::Result<Dataset> {
-        anyhow::bail!("not used in integration tests")
+    fn get_dataset(
+        &self,
+        _id: &Uuid,
+        _version: Option<i32>,
+    ) -> std::result::Result<Dataset, MetadataStoreError> {
+        Err(MetadataStoreError::OperationFailed {
+            message: "not used in integration tests".to_string(),
+        })
     }
 
-    fn get_dataset_by_name(&self, name: &str) -> anyhow::Result<Option<Dataset>> {
+    fn get_dataset_by_name(
+        &self,
+        name: &str,
+    ) -> std::result::Result<Option<Dataset>, MetadataStoreError> {
         DatasetRegistrationStore::get_dataset_by_name(self, name)
+            .map_err(|e| MetadataStoreError::OperationFailed {
+                message: e.to_string(),
+            })
     }
 
-    fn register_dataset(&self, dataset: Dataset) -> anyhow::Result<Uuid> {
+    fn register_dataset(
+        &self,
+        dataset: Dataset,
+    ) -> std::result::Result<Uuid, MetadataStoreError> {
         DatasetRegistrationStore::register_dataset(self, dataset)
+            .map_err(|e| MetadataStoreError::OperationFailed {
+                message: e.to_string(),
+            })
     }
 
-    fn get_project(&self, _id: &Uuid) -> anyhow::Result<Project> {
-        anyhow::bail!("not used in integration tests")
+    fn get_project(
+        &self,
+        _id: &Uuid,
+    ) -> std::result::Result<Project, MetadataStoreError> {
+        Err(MetadataStoreError::OperationFailed {
+            message: "not used in integration tests".to_string(),
+        })
     }
 
-    fn get_resolver(&self, _id: &str) -> anyhow::Result<Resolver> {
-        anyhow::bail!("not used in integration tests")
+    fn get_resolver(
+        &self,
+        _id: &str,
+    ) -> std::result::Result<Resolver, MetadataStoreError> {
+        Err(MetadataStoreError::OperationFailed {
+            message: "not used in integration tests".to_string(),
+        })
     }
 
-    fn update_run_status(&self, _id: &Uuid, _status: RunStatus) -> anyhow::Result<()> {
+    fn update_run_status(
+        &self,
+        _id: &Uuid,
+        _status: RunStatus,
+    ) -> std::result::Result<(), MetadataStoreError> {
         Ok(())
     }
 }

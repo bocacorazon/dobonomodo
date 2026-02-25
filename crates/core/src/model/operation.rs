@@ -106,9 +106,9 @@ pub struct OutputOperationParams {
 impl Default for OutputOperationParams {
     fn default() -> Self {
         Self {
-            destination: OutputDestination {
-                destination_type: "memory".to_string(),
-                target: None,
+            // Empty path is a valid placeholder; callers must supply a real destination.
+            destination: OutputDestination::Location {
+                path: String::new(),
             },
             include_deleted: false,
             selector: None,

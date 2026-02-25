@@ -16,6 +16,10 @@ impl From<&str> for Expression {
     fn from(source: &str) -> Self {
         Self {
             source: source.to_owned(),
+        }
+    }
+}
+
 #[derive(Debug, Clone, Deserialize)]
 #[serde(untagged)]
 enum ExpressionRepr {
