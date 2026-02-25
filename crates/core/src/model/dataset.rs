@@ -6,6 +6,7 @@ use uuid::Uuid;
 pub enum TemporalMode {
     Period,
     Bitemporal,
+    Snapshot,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
