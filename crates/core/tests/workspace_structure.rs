@@ -22,6 +22,9 @@ fn workspace_contains_required_crates_and_modules() {
     ];
 
     for path in required_paths {
-        assert!(repo_root.join(path).exists(), "missing required path: {path}");
+        assert!(
+            repo_root.join(path).exists(),
+            "missing required path: {path}"
+        );
     }
 }

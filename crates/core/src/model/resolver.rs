@@ -66,7 +66,7 @@ pub struct Resolver {
     pub updated_at: Option<String>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct ResolvedLocation {
     pub datasource_id: String,
     #[serde(default)]
@@ -77,11 +77,24 @@ pub struct ResolvedLocation {
     pub schema: Option<String>,
     #[serde(default)]
     pub period_identifier: Option<String>,
+    #[serde(default)]
+    pub resolver_id: Option<String>,
+    #[serde(default)]
+    pub rule_name: Option<String>,
+    #[serde(default)]
+    pub catalog_response: Option<serde_json::Value>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub struct OutputDestination {
-    pub destination_type: String,
-    #[serde(default)]
-    pub target: Option<String>,
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum OutputDestination {
+    Table {
+        datasource_id: String,
+        table: String,
+        #[serde(default)]
+        schema: Option<String>,
+    },
+    Location {
+        path: String,
+    },
 }

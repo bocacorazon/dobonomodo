@@ -37,3 +37,14 @@ Execution model: API/CLI triggers a Run, Resolver resolves physical locations fr
 - Resolver precedence is fixed: Project override -> Dataset resolver -> system default (`docs/entities/resolver.md`).
 - Test scenarios are YAML-driven, conventionally discovered at `tests/scenarios/**/*.yaml`, and executed via the built-in test resolver (`docs/capabilities/execute-test-scenario.md`).
 - Constitution rules are strict and should be treated as mandatory constraints in implementation sessions (`.specify/memory/constitution.md`), especially TDD + full quality gate adherence.
+
+## Headless agent mode
+
+When running inside a devcontainer as a headless agent (indicated by `AGENT_MODE=headless` env var):
+
+- Complete all tasks without asking for user input or confirmation.
+- If you encounter ambiguity, make the best decision consistent with the spec and constitution, then document the decision in the commit message.
+- If you encounter a CRITICAL blocker that cannot be resolved (e.g., conflicting spec requirements, missing dependencies that don't exist), write a description to `.agent-escalation` and exit.
+- Always run quality gates (build, test, clippy, fmt) before considering work complete.
+- Follow TDD strictly: write failing tests first, then implement, then refactor.
+- Commit frequently with descriptive messages including the spec ID.

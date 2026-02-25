@@ -1,0 +1,16 @@
+name: delete_all
+input_rows:
+  - _row_id: r1
+    _deleted: false
+    _modified_at: 1
+    amount: 10
+  - _row_id: r2
+    _deleted: true
+    _modified_at: 99
+    amount: 20
+  - _row_id: r3
+    _deleted: false
+    _modified_at: 1
+    amount: 30
+expected_remaining_count: 0
+

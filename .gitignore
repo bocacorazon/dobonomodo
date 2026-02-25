@@ -3,6 +3,9 @@
 **/target/
 /debug/
 /release/
+target/
+debug/
+release/
 *.rs.bk
 *.rlib
 *.prof*
@@ -20,4 +23,16 @@ Thumbs.db
 .idea/
 
 # Generated/spec session artifacts
-.specstory/
+#.specstory/
+
+# Agent runtime artifacts (generated during orchestrated runs)
+.agent-status
+.agent-log
+.agent-review
+.agent-review-history/
+.agent-escalation
+.agent-diff
+.env.agent
+.cargo-target/
+.phase-review-*.md
+.phase-review-diff

@@ -1,0 +1,20 @@
+id: "550e8400-e29b-41d4-a716-446655440001"
+name: "Fiscal Calendar 2024"
+description: "Calendar with year→quarter→month hierarchy for testing"
+status: active
+is_default: true
+levels:
+  - name: "year"
+    parent_level: null
+    identifier_pattern: "^\\d{4}$"
+    date_rules: []
+  - name: "quarter"
+    parent_level: "year"
+    identifier_pattern: "^\\d{4}-Q[1-4]$"
+    date_rules: []
+  - name: "month"
+    parent_level: "quarter"
+    identifier_pattern: "^\\d{4}-(0[1-9]|1[0-2])$"
+    date_rules: []
+created_at: "2024-01-01T00:00:00Z"
+updated_at: "2024-01-01T00:00:00Z"

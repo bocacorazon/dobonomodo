@@ -1,0 +1,21 @@
+name: delete_selective
+selectors:
+  zero_amount: "amount = 0"
+input_rows:
+  - _row_id: r1
+    _deleted: false
+    _modified_at: 1
+    amount: 0
+  - _row_id: r2
+    _deleted: false
+    _modified_at: 1
+    amount: 100
+  - _row_id: r3
+    _deleted: false
+    _modified_at: 1
+    amount: 200
+delete_selector: "{{zero_amount}}"
+expected_remaining_amounts:
+  - 100
+  - 200
+

@@ -1,0 +1,17 @@
+name: TS-03 FX conversion
+operation:
+  type: update
+  selector: null
+  assignments:
+    - column: amount_eur
+      expression: amount_usd * 0.85
+input:
+  columns: [order_id, amount_usd, amount_eur, _updated_at]
+  rows:
+    - [1, 100.0, null, 1000]
+    - [2, 200.0, null, 2000]
+expected:
+  columns: [order_id, amount_usd, amount_eur, _updated_at]
+  rows:
+    - [1, 100.0, 85.0, 1700000000000]
+    - [2, 200.0, 170.0, 1700000000000]

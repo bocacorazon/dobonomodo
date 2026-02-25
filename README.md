@@ -6,6 +6,8 @@ DobONoMoDo is a configuration-driven computation engine for running ordered data
 
 This repository is currently **specification-first**: architecture, domain model, and implementation plans are defined in `docs/`, while the Rust workspace scaffold is planned but not yet generated in the root.
 
+Recent implementation progress includes the append-operation execution path and tests under `crates/core/src/engine/append.rs` and `crates/core/tests/`.
+
 ## Target architecture (planned)
 
 - **Language/runtime**: Rust
@@ -54,9 +56,136 @@ cargo test
 cargo test <test_name>
 cargo clippy
 
+# Test harness - execute single scenario
 dobo test <scenario.yaml>
+
+# Test harness - execute test suite
 dobo test --suite tests/scenarios
+
+# Test harness - with output options
+dobo test <scenario.yaml> --verbose
+dobo test --suite tests/scenarios --output json
+dobo test --suite tests/scenarios --output junit > results.xml
 ```
+
+## Test Harness Usage
+
+The test harness validates that the computation engine produces correct results by comparing actual output to expected output defined in YAML scenario files.
+
+### Quick Start Example
+
+Create a test scenario file `my-test.yaml`:
+
+```yaml
+name: "My First Test"
+description: "Validates passthrough behavior"
+
+periods:
+  - identifier: "2026-01"
+    level: "month"
+    start_date: "2026-01-01"
+    end_date: "2026-01-31"
+
+input:
+  dataset:
+    id: "550e8400-e29b-41d4-a716-446655440000"
+    name: "test_data"
+    description: "Test dataset"
+    owner: "test"
+    version: 1
+    status: active
+    main_table:
+      name: "orders"
+      temporal_mode: period
+      columns:
+        - name: "order_id"
+          type: integer
+          nullable: false
+        - name: "amount"
+          type: decimal
+          nullable: false
+  
+  data:
+    orders:
+      rows:
+        - order_id: 1
+          amount: 100.0
+          _period: "2026-01"
+        - order_id: 2
+          amount: 200.0
+          _period: "2026-01"
+
+project:
+  id: "660e8400-e29b-41d4-a716-446655440001"
+  name: "passthrough"
+  owner: "test"
+  version: 1
+  status: active
+  visibility: private
+  input_dataset_id: "550e8400-e29b-41d4-a716-446655440000"
+  input_dataset_version: 1
+  materialization: eager
+  operations:
+    - order: 1
+      type: output
+      parameters: {}
+
+expected_output:
+  data:
+    rows:
+      - order_id: 1
+        amount: 100.0
+      - order_id: 2
+        amount: 200.0
+
+config:
+  match_mode: exact
+  validate_metadata: false
+  validate_traceability: false
+  snapshot_on_failure: true
+```
+
+Run the test:
+
+```bash
+cargo run --bin cli -- test my-test.yaml
+```
+
+### Test Configuration Options
+
+- `match_mode`: `exact` (all rows must match) or `subset` (expected rows must exist, extras tolerated)
+- `validate_metadata`: Include system columns (`_row_id`, `_created_at`, etc.) in comparison
+- `validate_traceability`: Validate trace events match expected assertions
+- `snapshot_on_failure`: Save actual output to `.snapshots/` directory on failure
+- `order_sensitive`: Require row order to match (default: false)
+
+### Test Suite Organization
+
+Organize test scenarios in directories:
+
+```
+tests/scenarios/
+├── basic/
+│   ├── passthrough-test.yaml
+│   └── simple-update-test.yaml
+├── complex/
+│   ├── multi-operation-test.yaml
+│   └── trace-validation-test.yaml
+└── data/
+    ├── orders.csv
+    └── products.parquet
+```
+
+Run all tests:
+
+```bash
+cargo run --bin cli -- test --suite tests/scenarios
+```
+
+For more details, see:
+- Full quickstart: `/workspace/specs/003-test-harness/quickstart.md`
+- Test scenario specification: `/workspace/specs/003-test-harness/spec.md`
+- Data model: `/workspace/specs/003-test-harness/data-model.md`
 
 ## Core execution model
 

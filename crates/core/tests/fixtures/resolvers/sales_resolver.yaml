@@ -1,0 +1,37 @@
+id: "sales_resolver_v2"
+name: "Sales Data Resolver v2"
+description: "Multi-rule resolver for sales dataset testing"
+version: 2
+status: active
+is_default: false
+rules:
+  # Rule 1: Post-cutover data in S3 (2024-Q1 and later)
+  - name: "post_cutover_s3"
+    when: "period >= '2024-Q1'"
+    data_level: "month"
+    strategy:
+      type: "path"
+      datasource_id: "s3_prod"
+      path: "/data/sales/{period_id}/{table_name}.parquet"
+  
+  # Rule 2: Legacy data in database (before 2024-Q1)
+  - name: "legacy_database"
+    when: "period < '2024-Q1'"
+    data_level: "month"
+    strategy:
+      type: "table"
+      datasource_id: "postgres_legacy"
+      table: "{table_name}_{period_id}"
+      schema: "sales_archive"
+  
+  # Rule 3: Catch-all fallback (unconditional)
+  - name: "catch_all_default"
+    when: null
+    data_level: "any"
+    strategy:
+      type: "path"
+      datasource_id: "s3_default"
+      path: "/default/{dataset_id}/{table_name}.parquet"
+
+created_at: "2024-01-15T00:00:00Z"
+updated_at: "2024-01-15T00:00:00Z"

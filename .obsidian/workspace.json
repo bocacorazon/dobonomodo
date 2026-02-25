@@ -27,12 +27,12 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "docs/specs/S00-workspace-scaffold/prompt.md",
-                "mode": "preview",
+                "file": "docs/development-workflow.md",
+                "mode": "source",
                 "source": true
               },
               "icon": "lucide-file",
-              "title": "prompt"
+              "title": "development-workflow"
             }
           }
         ],
@@ -198,8 +198,27 @@
       "bases:Create new base": false
     }
   },
-  "active": "57b760ba66d39c77",
+  "active": "5346e1073dac9bb4",
   "lastOpenFiles": [
+    "docs/reusable-agent-env-prompt-go.md",
+    "docs/reusable-agent-env-prompt.md",
+    "docs/architecture/sample-datasets.md",
+    "docs/development-workflow.md",
+    "docs/Dev Environment.md",
+    "docs/architecture/implementation-plan.md",
+    "scripts/phase-gate-review.sh",
+    "scripts/orchestrate.sh",
+    "scripts/review-prompt-template.md",
+    "scripts/dc-stop.sh",
+    "scripts/dc-launch.sh",
+    "scripts/agent-run.sh",
+    "scripts/worktree-list.sh",
+    "scripts/worktree-destroy.sh",
+    "scripts/worktree-create.sh",
+    "scripts/spec-map.toml",
+    "scripts",
+    "README.md",
+    "docs/specs/S00-workspace-scaffold/prompt.md",
     "docs/discussion/2026-02-22-session.md",
     "docs/specs/S21-api-server/prompt.md",
     "docs/specs/S20-cli/prompt.md",
@@ -216,25 +235,6 @@
     "docs/specs/S09-output-operation/prompt.md",
     "docs/specs/S08-append-operation/prompt.md",
     "docs/specs/S07-aggregate-operation/prompt.md",
-    "docs/specs/S06-delete-operation/prompt.md",
-    "docs/specs/S05-runtime-join/prompt.md",
-    "docs/entities/operation.md",
-    "docs/specs/S04-update-operation/prompt.md",
-    "docs/specs/S03-period-filter/prompt.md",
-    "docs/specs/S02-test-harness/prompt.md",
-    "docs/specs/S01-dsl-parser/prompt.md",
-    "docs/specs/S00-workspace-scaffold/prompt.md",
-    "docs/specs/S21-api-server",
-    "docs/specs/S20-cli",
-    "docs/specs/S19-engine-worker",
-    "docs/specs/S18-trace-writer",
-    "docs/specs/S17-metadata-store",
-    "docs/specs/S16-datasource-adapters",
-    "docs/specs/S15-run-lifecycle",
-    "docs/specs/S14-project-lifecycle",
-    "docs/specs/S13-activation-validation",
-    "docs/specs/S12-trace-engine",
-    "docs/architecture/sample-datasets.md",
-    "docs/architecture/implementation-plan.md"
+    "docs/specs/S06-delete-operation/prompt.md"
   ]
 }
