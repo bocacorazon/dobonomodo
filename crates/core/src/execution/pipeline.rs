@@ -29,7 +29,7 @@ pub fn execute_pipeline_with_output_writer(
 
     let mut working_full = input.lazy();
     let mut last_output: Option<DataFrame> = None;
-    let mut should_return_active_only = false;
+    let mut last_completed_operation: Option<u32> = None;
 
     for operation in operations {
         match operation.kind {
@@ -83,22 +83,23 @@ pub fn execute_pipeline_with_output_writer(
                 last_output = Some(output_frame);
             }
             OperationKind::Update | OperationKind::Aggregate | OperationKind::Append => {
-                // Pipeline math operations are not implemented yet; we only enforce visibility
-                // for non-output terminal results while preserving full rows for output ops.
-                should_return_active_only = true;
+                anyhow::bail!(
+                    "operation {:?} at order {} is not supported by execution::pipeline yet (last_completed_operation={:?})",
+                    operation.kind,
+                    operation.order,
+                    last_completed_operation
+                );
             }
         }
+
+        last_completed_operation = Some(operation.order);
     }
 
     if let Some(output) = last_output {
         return Ok(output);
     }
 
-    let final_frame = if should_return_active_only {
-        filter_active_rows(working_full)
-    } else {
-        working_full
-    };
+    let final_frame = filter_active_rows(working_full);
     final_frame.collect().map_err(Into::into)
 }
 

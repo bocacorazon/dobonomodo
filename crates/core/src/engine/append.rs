@@ -302,6 +302,8 @@ fn resolve_location(
         table: None,
         schema: None,
         period_identifier: run_period.map(str::to_owned),
+        resolver_id: Some(resolver.id.clone()),
+        rule_name: Some(selected_rule.name.clone()),
         catalog_response: None,
     };
 

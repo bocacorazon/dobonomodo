@@ -622,7 +622,7 @@ mod tests {
     }
 
     #[test]
-    fn test_validate_unknown_input_table_key_is_allowed() {
+    fn test_validate_unknown_input_table_key_fails() {
         let mut scenario = create_valid_scenario();
         scenario.input.data.insert(
             "unknown_table".to_string(),
@@ -632,7 +632,12 @@ mod tests {
             },
         );
 
-        assert!(scenario.validate().is_ok());
+        let result = scenario.validate();
+        assert!(result.is_err());
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("unknown table keys"));
     }
 
     #[test]

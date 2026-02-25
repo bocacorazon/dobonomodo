@@ -1,4 +1,3 @@
-use anyhow::Result;
 use dobo_core::engine::io_traits::{OutputWriter, OutputWriterError};
 use dobo_core::engine::ops::output::{
     execute_output, execute_output_with_registration_store,

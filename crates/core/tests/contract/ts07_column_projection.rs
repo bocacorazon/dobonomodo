@@ -1,7 +1,6 @@
 // Contract test for TS-07: Column Projection
 // Test Scenario TS-07 from sample-datasets.md
 
-use anyhow::Result;
 use dobo_core::engine::io_traits::{OutputWriter, OutputWriterError};
 use dobo_core::engine::ops::{execute_output, OutputOperation};
 use dobo_core::model::OutputDestination;

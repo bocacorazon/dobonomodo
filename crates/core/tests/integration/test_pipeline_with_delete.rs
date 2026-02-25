@@ -32,12 +32,6 @@ fn sample_project() -> Project {
                 alias: Some("delete-zero-amount".to_string()),
                 parameters: json!({ "selector": "amount = 0" }),
             },
-            OperationInstance {
-                order: 2,
-                kind: OperationKind::Update,
-                alias: Some("noop-update".to_string()),
-                parameters: json!({}),
-            },
         ],
         selectors: BTreeMap::new(),
         resolver_overrides: BTreeMap::new(),
@@ -87,8 +81,8 @@ fn test_pipeline_output_include_deleted_uses_full_working_set_and_writer() -> Re
                 alias: Some("output-all".to_string()),
                 parameters: json!({
                     "destination": {
-                        "destination_type": "memory",
-                        "target": "delete-report"
+                        "type": "location",
+                        "path": "delete-report"
                     },
                     "include_deleted": true
                 }),
@@ -111,7 +105,7 @@ fn test_pipeline_output_include_deleted_uses_full_working_set_and_writer() -> Re
         .expect("recording writer mutex poisoned");
     assert_eq!(writes.len(), 1);
     assert_eq!(writes[0].0, 3);
-    assert_eq!(writes[0].1, "memory");
+    assert_eq!(writes[0].1, "location");
     assert_eq!(writes[0].2.as_deref(), Some("delete-report"));
     Ok(())
 }
@@ -132,6 +126,34 @@ fn test_pipeline_rejects_unknown_selector_column_before_execution() -> Result<()
     let err = execute_pipeline(&project, frame).expect_err("selector should be rejected");
     let message = err.to_string();
     assert!(message.contains("unknown column") || message.contains("selector"));
+    Ok(())
+}
+
+#[test]
+fn test_pipeline_rejects_unsupported_operation_kinds() -> Result<()> {
+    let project = Project {
+        operations: vec![
+            OperationInstance {
+                order: 1,
+                kind: OperationKind::Delete,
+                alias: Some("delete-zero-amount".to_string()),
+                parameters: json!({ "selector": "amount = 0" }),
+            },
+            OperationInstance {
+                order: 2,
+                kind: OperationKind::Update,
+                alias: Some("unsupported-update".to_string()),
+                parameters: json!({}),
+            },
+        ],
+        ..sample_project()
+    };
+    let frame = sample_frame()?;
+
+    let err = execute_pipeline(&project, frame).expect_err("update should not be silently skipped");
+    let message = err.to_string();
+    assert!(message.contains("not supported"));
+    assert!(message.contains("order 2"));
     Ok(())
 }
 
