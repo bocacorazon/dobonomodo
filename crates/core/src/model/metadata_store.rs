@@ -17,15 +17,34 @@ pub enum MetadataStoreError {
 
 pub trait MetadataStore {
     fn get_dataset(&self, id: &Uuid, version: Option<i32>) -> Result<Dataset, MetadataStoreError>;
+    /// Look up a dataset by its logical name.
+    ///
+    /// Implement this method (and [`register_dataset`]) to support dataset
+    /// registration and lookup by name as described in the API contracts.
+    ///
+    /// The default implementation returns an [`OperationFailed`] error to
+    /// indicate that this `MetadataStore` implementation does not support
+    /// dataset lookup by name.
     fn get_dataset_by_name(&self, _name: &str) -> Result<Option<Dataset>, MetadataStoreError> {
         Err(MetadataStoreError::OperationFailed {
-            message: "get_dataset_by_name is not implemented".to_string(),
+            message: "dataset lookup by name is not supported by this MetadataStore implementation"
+                .to_string(),
         })
     }
 
+    /// Register a new dataset and return its assigned identifier.
+    ///
+    /// Implement this method (and [`get_dataset_by_name`]) to support dataset
+    /// registration functionality as described in the API contracts.
+    ///
+    /// The default implementation returns an [`OperationFailed`] error to
+    /// indicate that this `MetadataStore` implementation does not support
+    /// dataset registration.
     fn register_dataset(&self, _dataset: Dataset) -> Result<Uuid, MetadataStoreError> {
         Err(MetadataStoreError::OperationFailed {
-            message: "register_dataset is not implemented".to_string(),
+            message:
+                "dataset registration is not supported by this MetadataStore implementation"
+                    .to_string(),
         })
     }
 
