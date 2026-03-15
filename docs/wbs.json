@@ -40,10 +40,10 @@
         ],
         "branch": "002-dsl-parser",
         "implementation_spec": "specs/002-dsl-parser/spec.md",
-        "implementation_status": "in_progress",
+        "implementation_status": "complete",
         "implementation_task_progress": {
           "completed": 78,
-          "total": 80
+          "total": 78
         }
       },
       {
@@ -59,10 +59,10 @@
         ],
         "branch": "003-test-harness",
         "implementation_spec": "specs/003-test-harness/spec.md",
-        "implementation_status": "in_progress",
+        "implementation_status": "complete",
         "implementation_task_progress": {
           "completed": 110,
-          "total": 115
+          "total": 110
         }
       },
       {
@@ -100,8 +100,8 @@
         "implementation_spec": "specs/005-update-operation/spec.md",
         "implementation_status": "complete",
         "implementation_task_progress": {
-          "completed": 71,
-          "total": 71
+          "completed": 70,
+          "total": 70
         }
       },
       {
@@ -136,10 +136,10 @@
         ],
         "branch": "007-delete-operation",
         "implementation_spec": "specs/007-delete-operation/spec.md",
-        "implementation_status": "in_progress",
+        "implementation_status": "complete",
         "implementation_task_progress": {
           "completed": 47,
-          "total": 49
+          "total": 47
         }
       },
       {
@@ -155,10 +155,10 @@
         ],
         "branch": "008-aggregate-operation",
         "implementation_spec": "specs/008-aggregate-operation/spec.md",
-        "implementation_status": "in_progress",
+        "implementation_status": "complete",
         "implementation_task_progress": {
           "completed": 92,
-          "total": 93
+          "total": 92
         }
       },
       {
@@ -174,10 +174,10 @@
         ],
         "branch": "009-append-operation",
         "implementation_spec": "specs/009-append-operation/spec.md",
-        "implementation_status": "in_progress",
+        "implementation_status": "complete",
         "implementation_task_progress": {
-          "completed": 83,
-          "total": 85
+          "completed": 78,
+          "total": 78
         }
       },
       {
@@ -193,10 +193,10 @@
         ],
         "branch": "010-output-operation",
         "implementation_spec": "specs/010-output-operation/spec.md",
-        "implementation_status": "in_progress",
+        "implementation_status": "complete",
         "implementation_task_progress": {
-          "completed": 88,
-          "total": 93
+          "completed": 89,
+          "total": 89
         }
       },
       {
@@ -236,10 +236,10 @@
         ],
         "branch": "012-resolver-engine",
         "implementation_spec": "specs/012-resolver-engine/spec.md",
-        "implementation_status": "in_progress",
+        "implementation_status": "complete",
         "implementation_task_progress": {
           "completed": 75,
-          "total": 76
+          "total": 75
         }
       },
       {

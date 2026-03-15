@@ -12,9 +12,9 @@ description: "Task list for Test Harness feature implementation"
 
 **Organization**: Tasks are grouped by user story to enable independent implementation and testing of each story.
 
-## Format: `- [ ] [ID] [P?] [Story?] Description`
+## Format: `- \[ \] [ID] [P?] [Story?] Description`
 
-- **Checkbox**: All tasks start with `- [ ]` (markdown checkbox)
+- **Checkbox**: All tasks start with `- \[ \]` (markdown checkbox)
 - **[ID]**: Sequential task number (T001, T002, T003...)
 - **[P]**: Can run in parallel (different files, no dependencies)
 - **[Story]**: Which user story this task belongs to (US1, US2, US3, US4)
@@ -347,8 +347,8 @@ Stories complete and integrate independently.
 
 ## Notes
 
-- All tasks follow strict checklist format: `- [ ] T### [P?] [Story?] Description with file path`
-- [P] tasks target different files with no dependencies and can run in parallel
+- All tasks follow strict checklist format: `- \[ \] T### [P?] [Story?] Description with file path`
+- **[P]** tasks target different files with no dependencies and can run in parallel
 - [Story] label (US1-US4) maps each task to specific user story for traceability
 - Each user story is independently completable and testable
 - Foundational phase MUST complete before any user story work begins
@@ -356,4 +356,4 @@ Stories complete and integrate independently.
 - Pipeline execution is stubbed (passthrough) until S10 is implemented
 - Commit after each task or logical group
 - Stop at any checkpoint to validate story independently
-- Format validation: ALL tasks use checkbox `- [ ]`, task ID, optional [P]/[Story] labels, and file paths
+- Format validation: ALL tasks use checkbox `- \[ \]`, task ID, optional [P]/[Story] labels, and file paths

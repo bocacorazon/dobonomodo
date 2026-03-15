@@ -328,7 +328,7 @@ This delivers core delete functionality with selector-based filtering and automa
 
 ## Format Validation
 
-PASS: **All tasks follow strict checklist format**: `- [ ] [ID] [P?] [Story?] Description with file path`
+PASS: **All tasks follow strict checklist format**: `- \[ \] [ID] [P?] [Story?] Description with file path`
 
 PASS: **Task IDs**: Sequential (T001-T047) in execution order
 

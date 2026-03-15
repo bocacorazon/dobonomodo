@@ -450,7 +450,7 @@ With multiple developers:
 
 ## Validation Checklist
 
-✅ **Format compliance**: All tasks follow `- [ ] T### [P?] [US?] Description with file path` format
+✅ **Format compliance**: All tasks follow `- \[ \] T### [P?] [US?] Description with file path` format
 ✅ **User story organization**: Tasks grouped by story (US1, US2, US3)
 ✅ **TDD enforcement**: Tests written BEFORE implementation for each story
 ✅ **Independent testability**: Each story has acceptance criteria and can be validated standalone

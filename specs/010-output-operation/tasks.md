@@ -11,7 +11,7 @@ description: "Task list for output operation feature implementation"
 
 **Organization**: Tasks are grouped by user story to enable independent implementation and testing of each story.
 
-## Format: `- [ ] [ID] [P?] [Story?] Description`
+## Format: `- \[ \] [ID] [P?] [Story?] Description`
 
 - **[P]**: Can run in parallel (different files, no dependencies)
 - **[Story]**: Which user story this task belongs to (e.g., US1, US2, US3)
@@ -279,7 +279,7 @@ description: "Task list for output operation feature implementation"
 - [X] T083 [P] Create quickstart examples demonstrating all use cases in specs/010-output-operation/quickstart.md
 - [X] T084 [P] Run cargo clippy and fix all warnings in crates/core/src/engine/ops/output.rs
 - [X] T085 [P] Run cargo fmt to ensure consistent code formatting
-- [-] T086 Verify test coverage meets 80% minimum (100% for critical paths) using cargo tarpaulin
+- [X] T086 Verify test coverage meets 80% minimum (100% for critical paths) using cargo tarpaulin
 - [X] T087 Run all contract tests to verify TS-07 passes
 - [X] T088 Validate against quickstart.md scenarios
 - [X] T089 Update project documentation with output operation usage examples
@@ -420,9 +420,9 @@ With multiple developers:
   - ~22 tasks total (Setup + Foundational + US1 + US2)
 
 - **Format Validation**: ✅ ALL tasks follow strict checklist format:
-  - `- [ ] [TaskID] [P?] [Story?] Description with file path`
+  - `- \[ \] [TaskID] [P?] [Story?] Description with file path`
   - Sequential Task IDs (T001-T089)
-  - [P] marker only on parallelizable tasks
+- **[P]** marker only on parallelizable tasks
   - [Story] label (US1-US9) on all user story tasks
   - Explicit file paths in every description
 
@@ -432,7 +432,7 @@ With multiple developers:
 
 - All tests MANDATORY per TDD Principle I
 - Tests must be written FIRST and FAIL before implementation
-- [P] tasks = different files, no dependencies within phase
+- **[P]** tasks = different files, no dependencies within phase
 - [Story] label maps task to specific user story for traceability
 - Each user story should be independently completable and testable
 - Verify tests fail before implementing

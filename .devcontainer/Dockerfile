@@ -24,6 +24,9 @@ RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
     && apt-get install -y nodejs \
     && rm -rf /var/lib/apt/lists/*
 
+# Install standalone GitHub Copilot CLI
+RUN npm install -g @github/copilot
+
 # Install common Rust components
 RUN rustup component add clippy rustfmt
 

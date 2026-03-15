@@ -2,12 +2,16 @@
 # Post-create setup for agent devcontainer
 set -euo pipefail
 
-echo "[post-create] Installing Copilot CLI extension..."
-if command -v gh &>/dev/null; then
-    gh extension install github/gh-copilot 2>/dev/null || true
-    echo "[post-create] Copilot CLI installed"
+echo "[post-create] Installing standalone Copilot CLI..."
+if command -v npm &>/dev/null; then
+    npm install -g @github/copilot >/dev/null 2>&1 || true
+    if command -v copilot &>/dev/null; then
+        echo "[post-create] Copilot CLI installed"
+    else
+        echo "[post-create] WARNING: Could not install standalone Copilot CLI"
+    fi
 else
-    echo "[post-create] WARNING: gh CLI not found, skipping Copilot install"
+    echo "[post-create] WARNING: npm not found, skipping Copilot CLI install"
 fi
 
 echo "[post-create] Warming cargo cache..."

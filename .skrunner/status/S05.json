@@ -1,0 +1,11 @@
+{
+  "spec_id": "S05",
+  "display_name": "RuntimeJoin",
+  "full_name": "S05",
+  "track": "Phase 1 — Core Operations",
+  "branch": "S05",
+  "status": "FAILED",
+  "started_at": "2026-03-15T16:26:48Z",
+  "review_iterations": 0,
+  "last_error": "start worker for S05: docker [run -d --name skrunner-s05 -v /home/marcos/Projects/.worktrees/S05:/workspace skrunner-worker:latest sleep infinity] failed: exit status 125 (output: Unable to find image 'skrunner-worker:latest' locally\ndocker: Error response from daemon: pull access denied for skrunner-worker, repository does not exist or may require 'docker login': denied: requested access to the resource is denied\n\nRun 'docker run --help' for more information)"
+}
