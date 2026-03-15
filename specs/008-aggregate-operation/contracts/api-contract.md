@@ -1,7 +1,7 @@
 # Aggregate Operation API Contract
 
 **Version**: 1.0.0  
-**Feature**: 001-aggregate-operation  
+**Feature**: S07-aggregate-operation  
 **Date**: 2026-02-22
 
 ## Overview

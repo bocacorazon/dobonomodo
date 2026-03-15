@@ -1,9 +1,7 @@
 # Tasks: Aggregate Operation
 
-**Input**: Design documents from `/specs/001-aggregate-operation/` (reference artifacts)
-**Prerequisites**: plan.md ✓ (template only), spec.md (using 001 spec as reference), research.md (using 001 research), data-model.md (using 001 data-model), contracts/ (using 001 contracts)
-
-**Note**: This feature (008-aggregate-operation) shares the same specification as 001-aggregate-operation. Design artifacts from 001 are used as reference for task generation.
+**Input**: Design documents from `/specs/008-aggregate-operation/`
+**Prerequisites**: plan.md ✓, spec.md ✓, research.md ✓, data-model.md ✓, contracts/ ✓
 
 **Tests**: Per constitutional principle I (TDD), all tasks include tests written BEFORE implementation. Tests are MANDATORY and NON-NEGOTIABLE.
 

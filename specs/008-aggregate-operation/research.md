@@ -1,6 +1,6 @@
 # Research: Aggregate Operation
 
-**Feature**: 001-aggregate-operation  
+**Feature**: S07-aggregate-operation  
 **Date**: 2026-02-22  
 **Phase**: 0 - Outline & Research
 

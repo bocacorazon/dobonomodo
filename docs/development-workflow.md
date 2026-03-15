@@ -306,9 +306,10 @@ All these files are gitignored.
 
 ## Escalation Policy
 
-Per the project constitution's **completion bias** principle:
+Per the project constitution's **completion bias & task closure** principle:
 
 - Agents should resolve ambiguity themselves, making reasonable decisions consistent with the spec and architecture.
 - Only **CRITICAL** blockers that genuinely cannot be resolved (e.g., contradictory spec requirements, missing upstream dependencies) trigger escalation.
 - Decisions made autonomously are documented in commit messages.
+- Implementation is considered complete only when all tasks in `tasks.md` are marked done.
 - Style, naming, and formatting disagreements are never escalated — tooling (rustfmt, clippy) is authoritative.

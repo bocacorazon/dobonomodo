@@ -1,0 +1,17 @@
+models:
+    specify: claude-opus-4.6
+    plan: claude-opus-4.6-fast
+    tasks: claude-opus-4.6-fast
+    implement: gpt-5.3-codex
+    review: gemini-3-pro-review
+    fix: gemini-3-pro-review
+git:
+    base_branch: develop
+docker:
+    image: ""
+worktrees:
+    base_path: ../.worktrees
+review:
+    max_iterations: 10
+    template_path: ""
+    agent_path: ""

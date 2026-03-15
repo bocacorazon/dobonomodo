@@ -1,6 +1,6 @@
 # Quickstart: Aggregate Operation
 
-**Feature**: 001-aggregate-operation  
+**Feature**: S07-aggregate-operation  
 **Audience**: Developers implementing or using the aggregate operation  
 **Time to Complete**: 15 minutes
 

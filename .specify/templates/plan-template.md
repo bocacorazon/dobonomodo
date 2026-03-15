@@ -35,7 +35,7 @@
 
 - [ ] **Principle I (TDD)**: All implementation tasks paired with tests written FIRST
 - [ ] **Principle II (Quality Gates)**: Build, lint, and test infrastructure configured
-- [ ] **Principle III (Completion Bias)**: Ambiguities resolved; no open decision blocks
+- [ ] **Principle III (Completion Bias & Task Closure)**: Ambiguities resolved; no open decision blocks; completion criteria requires all `tasks.md` items marked done
 - [ ] **Principle IV (Comprehensive Testing)**: Test suite execution plan covers all test types
 
 **Notes**: Document any principle conflicts or justified exceptions below.

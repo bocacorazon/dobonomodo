@@ -37,7 +37,7 @@ Product Context → /speckit.constitution → /speckit.specify → /speckit.plan
 **Active goal**: Define entities and capabilities in sufficient detail to produce a high-quality product spec that feeds the Spec-Kit workflow.
 
 **Completed**:
-- ✅ Constitution ratified v1.0.0 — TDD, quality gates, completion bias, comprehensive test execution
+- ✅ Constitution amended to v1.1.0 — TDD, quality gates, completion bias with task closure, comprehensive test execution
 - ✅ `pm.entity` agent — Socratic interview → `docs/entities/<name>.md`
 - ✅ `pm.capability` agent — Socratic interview → `docs/capabilities/<name>.md`
 

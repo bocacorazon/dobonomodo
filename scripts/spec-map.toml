@@ -57,85 +57,85 @@ branch = "001-workspace-scaffold"
 prompt = "docs/specs/S00-workspace-scaffold/prompt.md"
 
 [specs.S01]
-branch = ""
+branch = "002-dsl-parser"
 prompt = "docs/specs/S01-dsl-parser/prompt.md"
 
 [specs.S02]
-branch = ""
+branch = "003-test-harness"
 prompt = "docs/specs/S02-test-harness/prompt.md"
 
 [specs.S03]
-branch = ""
+branch = "004-period-filter"
 prompt = "docs/specs/S03-period-filter/prompt.md"
 
 [specs.S04]
-branch = ""
+branch = "005-update-operation"
 prompt = "docs/specs/S04-update-operation/prompt.md"
 
 [specs.S05]
-branch = ""
+branch = "006-runtime-join"
 prompt = "docs/specs/S05-runtime-join/prompt.md"
 
 [specs.S06]
-branch = ""
+branch = "007-delete-operation"
 prompt = "docs/specs/S06-delete-operation/prompt.md"
 
 [specs.S07]
-branch = ""
+branch = "008-aggregate-operation"
 prompt = "docs/specs/S07-aggregate-operation/prompt.md"
 
 [specs.S08]
-branch = ""
+branch = "009-append-operation"
 prompt = "docs/specs/S08-append-operation/prompt.md"
 
 [specs.S09]
-branch = ""
+branch = "010-output-operation"
 prompt = "docs/specs/S09-output-operation/prompt.md"
 
 [specs.S10]
-branch = ""
+branch = "011-pipeline-executor"
 prompt = "docs/specs/S10-pipeline-executor/prompt.md"
 
 [specs.S11]
-branch = ""
+branch = "012-resolver-engine"
 prompt = "docs/specs/S11-resolver-engine/prompt.md"
 
 [specs.S12]
-branch = ""
+branch = "013-trace-engine"
 prompt = "docs/specs/S12-trace-engine/prompt.md"
 
 [specs.S13]
-branch = ""
+branch = "014-activation-validation"
 prompt = "docs/specs/S13-activation-validation/prompt.md"
 
 [specs.S14]
-branch = ""
+branch = "015-project-lifecycle"
 prompt = "docs/specs/S14-project-lifecycle/prompt.md"
 
 [specs.S15]
-branch = ""
+branch = "016-run-lifecycle"
 prompt = "docs/specs/S15-run-lifecycle/prompt.md"
 
 [specs.S16]
-branch = ""
+branch = "017-datasource-adapters"
 prompt = "docs/specs/S16-datasource-adapters/prompt.md"
 
 [specs.S17]
-branch = ""
+branch = "018-metadata-store"
 prompt = "docs/specs/S17-metadata-store/prompt.md"
 
 [specs.S18]
-branch = ""
+branch = "019-trace-writer"
 prompt = "docs/specs/S18-trace-writer/prompt.md"
 
 [specs.S19]
-branch = ""
+branch = "020-engine-worker"
 prompt = "docs/specs/S19-engine-worker/prompt.md"
 
 [specs.S20]
-branch = ""
+branch = "021-cli"
 prompt = "docs/specs/S20-cli/prompt.md"
 
 [specs.S21]
-branch = ""
+branch = "022-api-server"
 prompt = "docs/specs/S21-api-server/prompt.md"

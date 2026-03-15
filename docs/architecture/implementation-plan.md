@@ -52,13 +52,13 @@ See `docs/architecture/sample-datasets.md` for full schema, sample rows, and tes
 | **S08** | Append Operation | Load source Dataset, optional selector, optional aggregation, column alignment, `_row_id` generation | S03 | B |
 | **S09** | Output Operation | Write working dataset to destination, selector, column projection, `include_deleted`, `register_as_dataset` | S03 | B |
 
-> **S04 through S09 can all run in parallel** — each is an independent operation type. They share S03 (period-filtered `LazyFrame`) but don't depend on each other.
+> **S04, S05, S06, S07, S08, and S09 can all run in parallel** — each is an independent operation type. They share S03 (period-filtered `LazyFrame`) but don't depend on each other.
 
 ### Phase 2 — Orchestration
 
 | Spec | Name | Description | Depends On | Parallel Group |
 |---|---|---|---|---|
-| **S10** | Pipeline Executor | Sequential operation execution engine: iterate `ProjectSnapshot.operations`, dispatch to operation implementations, manage working `LazyFrame` state | S04–S09 (all operations) | — |
+| **S10** | Pipeline Executor | Sequential operation execution engine: iterate `ProjectSnapshot.operations`, dispatch to operation implementations, manage working `LazyFrame` state | S04, S05, S06, S07, S08, S09 | — |
 | **S11** | Resolver Engine | Rule evaluation, `when` condition matching, period expansion via Calendar hierarchy, template rendering, strategy dispatch → `Vec<ResolvedLocation>` | S01 | C |
 | **S12** | Trace Engine | Before/after diff generation per operation, `TraceEvent` production, change type detection (`created`/`updated`/`deleted`) | S10 | — |
 
@@ -96,7 +96,7 @@ See `docs/architecture/sample-datasets.md` for full schema, sample rows, and tes
 
 ---
 
-## Parallelism Map
+## Dependency Graph (Enumerated)
 
 ^d36dec
 
@@ -134,7 +134,7 @@ Phase 0:  S00
     S21
 ```
 
-**Maximum parallelism**: up to **8 specs simultaneously** during Phase 1 (S04–S09 + S11 + S16/S17).
+**Maximum parallelism**: up to **9 specs simultaneously** after S03 completes (S04, S05, S06, S07, S08, S09, S11, S16, S17).
 
 ---
 

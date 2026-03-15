@@ -34,6 +34,8 @@ The project uses Spec-Kit as the source-of-truth workflow:
 
 `/speckit.constitution -> /speckit.specify -> /speckit.plan -> /speckit.tasks -> /speckit.implement`
 
+Implementation completion gate: work is complete only when all items in the feature `tasks.md` are marked done.
+
 Supporting context:
 - `.specify/memory/project-context.md`
 - `.specify/memory/constitution.md`

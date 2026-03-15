@@ -1,0 +1,447 @@
+{
+  "schema_version": "1.0",
+  "project": {
+    "id": "dobonomodo",
+    "name": "DobONoMoDo",
+    "description": "Work breakdown structure derived from docs/architecture/implementation-plan.md.",
+    "context_files": [
+      "docs/architecture/implementation-plan.md",
+      "docs/architecture/system-architecture.md",
+      "docs/architecture/sample-datasets.md"
+    ],
+    "specs": [
+      {
+        "id": "S00",
+        "name": "Workspace Scaffold",
+        "prompt": "docs/specs/S00-workspace-scaffold/prompt.md",
+        "track": "Phase 0 \u2014 Foundation",
+        "depends_on": [],
+        "context_files": [
+          "docs/specs/S00-workspace-scaffold/prompt.md"
+        ],
+        "branch": "001-workspace-scaffold",
+        "implementation_spec": "specs/001-workspace-scaffold/spec.md",
+        "implementation_status": "complete",
+        "implementation_task_progress": {
+          "completed": 38,
+          "total": 38
+        }
+      },
+      {
+        "id": "S01",
+        "name": "DSL Parser & Expression Compiler",
+        "prompt": "docs/specs/S01-dsl-parser/prompt.md",
+        "track": "Phase 0 \u2014 Foundation",
+        "depends_on": [
+          "S00"
+        ],
+        "context_files": [
+          "docs/specs/S01-dsl-parser/prompt.md"
+        ],
+        "branch": "002-dsl-parser",
+        "implementation_spec": "specs/002-dsl-parser/spec.md",
+        "implementation_status": "in_progress",
+        "implementation_task_progress": {
+          "completed": 78,
+          "total": 80
+        }
+      },
+      {
+        "id": "S02",
+        "name": "Test Harness",
+        "prompt": "docs/specs/S02-test-harness/prompt.md",
+        "track": "Phase 0 \u2014 Foundation",
+        "depends_on": [
+          "S00"
+        ],
+        "context_files": [
+          "docs/specs/S02-test-harness/prompt.md"
+        ],
+        "branch": "003-test-harness",
+        "implementation_spec": "specs/003-test-harness/spec.md",
+        "implementation_status": "in_progress",
+        "implementation_task_progress": {
+          "completed": 110,
+          "total": 115
+        }
+      },
+      {
+        "id": "S03",
+        "name": "Period Filter",
+        "prompt": "docs/specs/S03-period-filter/prompt.md",
+        "track": "Phase 1 \u2014 Core Operations",
+        "depends_on": [
+          "S01",
+          "S02"
+        ],
+        "context_files": [
+          "docs/specs/S03-period-filter/prompt.md"
+        ],
+        "branch": "004-period-filter",
+        "implementation_spec": "specs/004-period-filter/spec.md",
+        "implementation_status": "complete",
+        "implementation_task_progress": {
+          "completed": 17,
+          "total": 17
+        }
+      },
+      {
+        "id": "S04",
+        "name": "Update Operation",
+        "prompt": "docs/specs/S04-update-operation/prompt.md",
+        "track": "Phase 1 \u2014 Core Operations",
+        "depends_on": [
+          "S03"
+        ],
+        "context_files": [
+          "docs/specs/S04-update-operation/prompt.md"
+        ],
+        "branch": "005-update-operation",
+        "implementation_spec": "specs/005-update-operation/spec.md",
+        "implementation_status": "complete",
+        "implementation_task_progress": {
+          "completed": 71,
+          "total": 71
+        }
+      },
+      {
+        "id": "S05",
+        "name": "RuntimeJoin",
+        "prompt": "docs/specs/S05-runtime-join/prompt.md",
+        "track": "Phase 1 \u2014 Core Operations",
+        "depends_on": [
+          "S03"
+        ],
+        "context_files": [
+          "docs/specs/S05-runtime-join/prompt.md"
+        ],
+        "branch": "006-runtime-join",
+        "implementation_spec": "specs/006-runtime-join/spec.md",
+        "implementation_status": "not_started",
+        "implementation_task_progress": {
+          "completed": 0,
+          "total": 0
+        }
+      },
+      {
+        "id": "S06",
+        "name": "Delete Operation",
+        "prompt": "docs/specs/S06-delete-operation/prompt.md",
+        "track": "Phase 1 \u2014 Core Operations",
+        "depends_on": [
+          "S03"
+        ],
+        "context_files": [
+          "docs/specs/S06-delete-operation/prompt.md"
+        ],
+        "branch": "007-delete-operation",
+        "implementation_spec": "specs/007-delete-operation/spec.md",
+        "implementation_status": "in_progress",
+        "implementation_task_progress": {
+          "completed": 47,
+          "total": 49
+        }
+      },
+      {
+        "id": "S07",
+        "name": "Aggregate Operation",
+        "prompt": "docs/specs/S07-aggregate-operation/prompt.md",
+        "track": "Phase 1 \u2014 Core Operations",
+        "depends_on": [
+          "S03"
+        ],
+        "context_files": [
+          "docs/specs/S07-aggregate-operation/prompt.md"
+        ],
+        "branch": "008-aggregate-operation",
+        "implementation_spec": "specs/008-aggregate-operation/spec.md",
+        "implementation_status": "in_progress",
+        "implementation_task_progress": {
+          "completed": 92,
+          "total": 93
+        }
+      },
+      {
+        "id": "S08",
+        "name": "Append Operation",
+        "prompt": "docs/specs/S08-append-operation/prompt.md",
+        "track": "Phase 1 \u2014 Core Operations",
+        "depends_on": [
+          "S03"
+        ],
+        "context_files": [
+          "docs/specs/S08-append-operation/prompt.md"
+        ],
+        "branch": "009-append-operation",
+        "implementation_spec": "specs/009-append-operation/spec.md",
+        "implementation_status": "in_progress",
+        "implementation_task_progress": {
+          "completed": 83,
+          "total": 85
+        }
+      },
+      {
+        "id": "S09",
+        "name": "Output Operation",
+        "prompt": "docs/specs/S09-output-operation/prompt.md",
+        "track": "Phase 1 \u2014 Core Operations",
+        "depends_on": [
+          "S03"
+        ],
+        "context_files": [
+          "docs/specs/S09-output-operation/prompt.md"
+        ],
+        "branch": "010-output-operation",
+        "implementation_spec": "specs/010-output-operation/spec.md",
+        "implementation_status": "in_progress",
+        "implementation_task_progress": {
+          "completed": 88,
+          "total": 93
+        }
+      },
+      {
+        "id": "S10",
+        "name": "Pipeline Executor",
+        "prompt": "docs/specs/S10-pipeline-executor/prompt.md",
+        "track": "Phase 2 \u2014 Orchestration",
+        "depends_on": [
+          "S04",
+          "S05",
+          "S06",
+          "S07",
+          "S08",
+          "S09"
+        ],
+        "context_files": [
+          "docs/specs/S10-pipeline-executor/prompt.md"
+        ],
+        "branch": "011-pipeline-executor",
+        "implementation_spec": "specs/011-pipeline-executor/spec.md",
+        "implementation_status": "not_started",
+        "implementation_task_progress": {
+          "completed": 0,
+          "total": 0
+        }
+      },
+      {
+        "id": "S11",
+        "name": "Resolver Engine",
+        "prompt": "docs/specs/S11-resolver-engine/prompt.md",
+        "track": "Phase 2 \u2014 Orchestration",
+        "depends_on": [
+          "S01"
+        ],
+        "context_files": [
+          "docs/specs/S11-resolver-engine/prompt.md"
+        ],
+        "branch": "012-resolver-engine",
+        "implementation_spec": "specs/012-resolver-engine/spec.md",
+        "implementation_status": "in_progress",
+        "implementation_task_progress": {
+          "completed": 75,
+          "total": 76
+        }
+      },
+      {
+        "id": "S12",
+        "name": "Trace Engine",
+        "prompt": "docs/specs/S12-trace-engine/prompt.md",
+        "track": "Phase 2 \u2014 Orchestration",
+        "depends_on": [
+          "S10"
+        ],
+        "context_files": [
+          "docs/specs/S12-trace-engine/prompt.md"
+        ],
+        "branch": "013-trace-engine",
+        "implementation_spec": "specs/013-trace-engine/spec.md",
+        "implementation_status": "not_started",
+        "implementation_task_progress": {
+          "completed": 0,
+          "total": 0
+        }
+      },
+      {
+        "id": "S13",
+        "name": "Activation Validation",
+        "prompt": "docs/specs/S13-activation-validation/prompt.md",
+        "track": "Phase 3 \u2014 Lifecycle & Validation",
+        "depends_on": [
+          "S01",
+          "S11"
+        ],
+        "context_files": [
+          "docs/specs/S13-activation-validation/prompt.md"
+        ],
+        "branch": "014-activation-validation",
+        "implementation_spec": "specs/014-activation-validation/spec.md",
+        "implementation_status": "not_started",
+        "implementation_task_progress": {
+          "completed": 0,
+          "total": 0
+        }
+      },
+      {
+        "id": "S14",
+        "name": "Project Lifecycle",
+        "prompt": "docs/specs/S14-project-lifecycle/prompt.md",
+        "track": "Phase 3 \u2014 Lifecycle & Validation",
+        "depends_on": [
+          "S13"
+        ],
+        "context_files": [
+          "docs/specs/S14-project-lifecycle/prompt.md"
+        ],
+        "branch": "015-project-lifecycle",
+        "implementation_spec": "specs/015-project-lifecycle/spec.md",
+        "implementation_status": "not_started",
+        "implementation_task_progress": {
+          "completed": 0,
+          "total": 0
+        }
+      },
+      {
+        "id": "S15",
+        "name": "Run Lifecycle",
+        "prompt": "docs/specs/S15-run-lifecycle/prompt.md",
+        "track": "Phase 3 \u2014 Lifecycle & Validation",
+        "depends_on": [
+          "S10",
+          "S12"
+        ],
+        "context_files": [
+          "docs/specs/S15-run-lifecycle/prompt.md"
+        ],
+        "branch": "016-run-lifecycle",
+        "implementation_spec": "specs/016-run-lifecycle/spec.md",
+        "implementation_status": "not_started",
+        "implementation_task_progress": {
+          "completed": 0,
+          "total": 0
+        }
+      },
+      {
+        "id": "S16",
+        "name": "DataSource Adapters",
+        "prompt": "docs/specs/S16-datasource-adapters/prompt.md",
+        "track": "Phase 4 \u2014 IO & Infrastructure",
+        "depends_on": [
+          "S00"
+        ],
+        "context_files": [
+          "docs/specs/S16-datasource-adapters/prompt.md"
+        ],
+        "branch": "017-datasource-adapters",
+        "implementation_spec": "specs/017-datasource-adapters/spec.md",
+        "implementation_status": "not_started",
+        "implementation_task_progress": {
+          "completed": 0,
+          "total": 0
+        }
+      },
+      {
+        "id": "S17",
+        "name": "Metadata Store",
+        "prompt": "docs/specs/S17-metadata-store/prompt.md",
+        "track": "Phase 4 \u2014 IO & Infrastructure",
+        "depends_on": [
+          "S00"
+        ],
+        "context_files": [
+          "docs/specs/S17-metadata-store/prompt.md"
+        ],
+        "branch": "018-metadata-store",
+        "implementation_spec": "specs/018-metadata-store/spec.md",
+        "implementation_status": "not_started",
+        "implementation_task_progress": {
+          "completed": 0,
+          "total": 0
+        }
+      },
+      {
+        "id": "S18",
+        "name": "Trace Writer",
+        "prompt": "docs/specs/S18-trace-writer/prompt.md",
+        "track": "Phase 4 \u2014 IO & Infrastructure",
+        "depends_on": [
+          "S12"
+        ],
+        "context_files": [
+          "docs/specs/S18-trace-writer/prompt.md"
+        ],
+        "branch": "019-trace-writer",
+        "implementation_spec": "specs/019-trace-writer/spec.md",
+        "implementation_status": "not_started",
+        "implementation_task_progress": {
+          "completed": 0,
+          "total": 0
+        }
+      },
+      {
+        "id": "S19",
+        "name": "Engine Worker Binary",
+        "prompt": "docs/specs/S19-engine-worker/prompt.md",
+        "track": "Phase 5 \u2014 Binaries & Deployment",
+        "depends_on": [
+          "S10",
+          "S11",
+          "S12",
+          "S16",
+          "S17",
+          "S18"
+        ],
+        "context_files": [
+          "docs/specs/S19-engine-worker/prompt.md"
+        ],
+        "branch": "020-engine-worker",
+        "implementation_spec": "specs/020-engine-worker/spec.md",
+        "implementation_status": "not_started",
+        "implementation_task_progress": {
+          "completed": 0,
+          "total": 0
+        }
+      },
+      {
+        "id": "S20",
+        "name": "CLI Binary",
+        "prompt": "docs/specs/S20-cli/prompt.md",
+        "track": "Phase 5 \u2014 Binaries & Deployment",
+        "depends_on": [
+          "S02",
+          "S10",
+          "S13"
+        ],
+        "context_files": [
+          "docs/specs/S20-cli/prompt.md"
+        ],
+        "branch": "021-cli",
+        "implementation_spec": "specs/021-cli/spec.md",
+        "implementation_status": "not_started",
+        "implementation_task_progress": {
+          "completed": 0,
+          "total": 0
+        }
+      },
+      {
+        "id": "S21",
+        "name": "API Server",
+        "prompt": "docs/specs/S21-api-server/prompt.md",
+        "track": "Phase 5 \u2014 Binaries & Deployment",
+        "depends_on": [
+          "S17",
+          "S19"
+        ],
+        "context_files": [
+          "docs/specs/S21-api-server/prompt.md"
+        ],
+        "branch": "022-api-server",
+        "implementation_spec": "specs/022-api-server/spec.md",
+        "implementation_status": "not_started",
+        "implementation_task_progress": {
+          "completed": 0,
+          "total": 0
+        }
+      }
+    ]
+  }
+}

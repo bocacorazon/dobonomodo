@@ -16,7 +16,7 @@
 ### [PRINCIPLE_3_NAME]
 <!-- Example: III. Test-First (NON-NEGOTIABLE) -->
 [PRINCIPLE_3_DESCRIPTION]
-<!-- Example: TDD mandatory: Tests written → User approved → Tests fail → Then implement; Red-Green-Refactor cycle strictly enforced -->
+<!-- Example: TDD mandatory: Tests written → User approved → Tests fail → Then implement; Red-Green-Refactor cycle strictly enforced; implementation completion requires all tasks in tasks.md marked done -->
 
 ### [PRINCIPLE_4_NAME]
 <!-- Example: IV. Integration Testing -->

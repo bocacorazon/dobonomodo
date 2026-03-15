@@ -9,8 +9,8 @@ Auto-generated from all feature plans. Last updated: 2026-02-22
 - In-memory dataframes (Polars LazyFrame/DataFrame); output via OutputWriter trait (010-output-operation)
 - Rust 2021 edition + Polars 0.46 (DataFrame processing), Serde (serialization), UUID v7, Chrono (009-append-operation)
 - N/A (data loading via resolver pattern, processing in-memory with Polars) (009-append-operation)
-- Rust 1.75+ (edition 2021) + Polars 0.46 (lazy API for DataFrames), serde/serde_json, uuid v7, anyhow/thiserror (001-aggregate-operation)
-- PostgreSQL (metadata store), in-memory working dataset (Polars LazyFrame) (001-aggregate-operation)
+- Rust 1.75+ (edition 2021) + Polars 0.46 (lazy API for DataFrames), serde/serde_json, uuid v7, anyhow/thiserror (008-aggregate-operation)
+- PostgreSQL (metadata store), in-memory working dataset (Polars LazyFrame) (008-aggregate-operation)
 - Rust 1.75+ (Rust 2021 edition) + Polars 0.46 (lazy API), serde, serde_json, serde_yaml, anyhow, thiserror (005-update-operation)
 - N/A (operates on in-memory LazyFrame) (005-update-operation)
 - Rust 2021 edition + Polars (lazy API for data operations), serde (serialization), uuid (row tracking) (007-delete-operation)
@@ -47,8 +47,8 @@ Rust (stable toolchain policy; project MSRV to be pinned when CI toolchain basel
 - 012-resolver-engine: Added Rust 1.93.1 (edition 2021) + serde/serde_json (serialization), uuid (identifiers), chrono (date handling), polars (data processing context)
 - 010-output-operation: Added Rust 1.75+ (edition 2021) + polars (dataframe operations), serde (serialization), anyhow/thiserror (error handling)
 - 009-append-operation: Added Rust 2021 edition + Polars 0.46 (DataFrame processing), Serde (serialization), UUID v7, Chrono
-- 001-aggregate-operation: Added Rust 1.75+ (edition 2021) + Polars 0.46 (lazy API for DataFrames), serde/serde_json, uuid v7, anyhow/thiserror
-- 001-aggregate-operation: Added Polars 0.46 lazy API for group-by aggregations (SUM, COUNT, AVG, MIN_AGG, MAX_AGG), UUID v7 for row IDs, PostgreSQL metadata store
+- 008-aggregate-operation: Added Rust 1.75+ (edition 2021) + Polars 0.46 (lazy API for DataFrames), serde/serde_json, uuid v7, anyhow/thiserror
+- 008-aggregate-operation: Added Polars 0.46 lazy API for group-by aggregations (SUM, COUNT, AVG, MIN_AGG, MAX_AGG), UUID v7 for row IDs, PostgreSQL metadata store
 - 007-delete-operation: Added Rust 2021 edition + Polars (lazy API for data operations), serde (serialization), uuid (row tracking)
 - 005-update-operation: Added Rust 1.75+ (Rust 2021 edition) + Polars 0.46 (lazy API), serde, serde_json, serde_yaml, anyhow, thiserror
 - 002-dsl-parser: Added Rust 2021 edition (workspace baseline: 0.1.0)
