@@ -1,19 +1,20 @@
 <!--
 SYNC IMPACT REPORT
 ==================
-Version Change: [none] → 1.0.0 (initial ratification)
-Modified Principles: N/A (initial creation)
+Version Change: 1.0.0 → 1.1.0
+Modified Principles:
+  - III. Completion Bias (NON-NEGOTIABLE) → III. Completion Bias & Task Closure (NON-NEGOTIABLE)
 Added Sections:
-  - Core Principles (4 principles defined: TDD, Quality Gates, Completion Bias, Comprehensive Testing)
-  - Quality Assurance (Code Quality Standards, Test Coverage Requirements)
-  - Development Workflow (Feature Development Process, Commit Standards, Issue Resolution Protocol)
-  - Governance (Constitutional Authority, Amendment Process, Version Control, Compliance Verification, Continuous Improvement)
-Removed Sections: N/A
+  - None
+Removed Sections:
+  - None
 Templates Requiring Updates:
-  ✅ plan-template.md - Constitution Check section updated with specific principle verification checklist
-  ✅ spec-template.md - User scenarios & acceptance criteria already align with TDD principle
-  ✅ tasks-template.md - Updated to enforce MANDATORY tests (was "optional"), aligned with TDD Principle I
-  ✅ Agent files - Verified no agent-specific references (generic guidance maintained)
+  ✅ .specify/templates/plan-template.md - Principle III check now requires all tasks to be marked done before completion
+  ✅ .specify/templates/tasks-template.md - Added explicit implementation completion gate requiring all tasks checked off
+  ✅ .specify/templates/constitution-template.md - Principle III guidance example expanded with task-closure completion gate
+  ✅ .specify/templates/spec-template.md - No changes required (already compatible; no completion-gate conflict)
+  ✅ .specify/templates/commands/*.md - Not present in this repository (no command-template updates required)
+  ✅ README.md - Development workflow now includes explicit task-closure completion gate
 Follow-up TODOs: None
 -->
 
@@ -48,9 +49,9 @@ Follow-up TODOs: None
 
 **Rationale**: Quality gates prevent technical debt accumulation. Fixing preexisting issues during feature work maintains codebase health and prevents the "broken windows" effect where one failure leads to acceptance of more failures.
 
-### III. Completion Bias (NON-NEGOTIABLE)
+### III. Completion Bias & Task Closure (NON-NEGOTIABLE)
 
-**MUST**: Development agents MUST bias towards autonomous completion.
+**MUST**: Development agents MUST bias towards autonomous completion and explicit task closure.
 
 - Agents MUST make reasonable technical decisions independently
 - Agents MUST ask clarifying questions ONLY when truly blocked
@@ -58,8 +59,10 @@ Follow-up TODOs: None
 - NOT blocked: technology choice, implementation approach, file naming, code structure
 - Agents MUST propose solutions with rationale rather than ask for permission
 - When multiple valid approaches exist, agents MUST choose one and document the decision
+- Implementation MUST NOT be declared complete until every task in `tasks.md` is marked done
+- Any open, unchecked, or deferred task in `tasks.md` MUST be treated as incomplete implementation scope
 
-**Rationale**: Excessive back-and-forth interrupts flow, delays delivery, and wastes human bandwidth. Autonomous agents that make sound technical decisions and complete features enable faster iteration and higher throughput.
+**Rationale**: Excessive back-and-forth interrupts flow, delays delivery, and wastes human bandwidth. Autonomous agents that make sound technical decisions and close all planned tasks before declaring completion produce predictable delivery quality and eliminate false completion signals.
 
 ### IV. Comprehensive Test Execution (NON-NEGOTIABLE)
 
@@ -104,6 +107,7 @@ Follow-up TODOs: None
    - Fix any preexisting failures discovered
    - Commit only when all tests pass
 5. **Validation**: Verify against acceptance criteria
+6. **Completion Gate**: Mark implementation complete ONLY when all items in tasks.md are checked done
 
 ### Commit Standards
 
@@ -150,6 +154,7 @@ When discovering preexisting issues during feature work:
 - All pull requests MUST verify constitutional compliance
 - Automated checks MUST enforce quality gates
 - Code reviews MUST reference specific constitutional principles
+- Implementation completion claims MUST verify all `tasks.md` entries are marked done
 - Non-compliance MUST be addressed before merge
 
 ### Continuous Improvement
@@ -159,4 +164,4 @@ When discovering preexisting issues during feature work:
 - Feedback loops MUST inform constitutional amendments
 - Retrospectives MUST identify principle violations and root causes
 
-**Version**: 1.0.0 | **Ratified**: 2026-02-21 | **Last Amended**: 2026-02-21
+**Version**: 1.1.0 | **Ratified**: 2026-02-21 | **Last Amended**: 2026-03-15
